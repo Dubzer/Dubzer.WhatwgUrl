@@ -18,6 +18,12 @@ jobs:
       - uses: 'actions/setup-dotnet@v4'
         with:
           dotnet-version: '8.x'
+      - name: 'Replace resources in README.md'
+        uses: richardrigutins/replace-in-files@v2
+        with:
+          files: 'README.md'
+          replacement-text: '(https://raw.githubusercontent.com/Dubzer/Dubzer.WhatwgUrl/${{ github.event.release.tag_name }}/docs/resources'
+          search-text: '(docs/resources'
       - name: 'Replace relative links to docs with absolute ones'
         uses: richardrigutins/replace-in-files@v2
         with:
