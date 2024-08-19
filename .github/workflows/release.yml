@@ -11,7 +11,7 @@ on:
 
 jobs:
   publish:
-    name: 'Build and publish to NuGet'
+    name: 'Build and publish to the package repository'
     runs-on: 'ubuntu-latest'
     steps:
       - uses: 'actions/checkout@v4'
@@ -24,3 +24,5 @@ jobs:
         run: dotnet nuget add source --username Dubzer --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/Dubzer/index.json"
       - name: 'Publish package to Github Packages'
         run: dotnet nuget push -s github --api-key ${{ secrets.GITHUB_TOKEN }} artifacts/package/release/*.nupkg
+      - name: 'Publish package to NuGet'
+        run: dotnet nuget push -s https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
