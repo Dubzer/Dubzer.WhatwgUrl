@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Buffers;
-using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using Nunycode;
 
 namespace Dubzer.WhatwgUrl.Uts46;
 
@@ -30,7 +28,7 @@ internal static class Idna
                 if (span.Length == 4)
                     return null;
 
-                var decodedLabel = Punycooode.Decode(span[4..]);
+                var decodedLabel = Punycode.Decode(span[4..]);
                 if (decodedLabel is null)
                     return null;
 
@@ -73,7 +71,7 @@ internal static class Idna
             runes = input.EnumerateRunes().ToArray();
         }
 
-        var encodedLabel = Punycooode.Encode(runes);
+        var encodedLabel = Punycode.Encode(runes);
         return encodedLabel is null
             ? null :
             $"xn--{encodedLabel}";

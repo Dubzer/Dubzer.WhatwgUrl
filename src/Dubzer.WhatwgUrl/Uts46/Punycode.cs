@@ -6,7 +6,7 @@ using System.Text;
 
 namespace Dubzer.WhatwgUrl.Uts46;
 
-internal class Punycooode
+internal static class Punycode
 {
     // these constants are from https://datatracker.ietf.org/doc/html/rfc3492#section-5
     private const int Base = 36;

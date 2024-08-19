@@ -7,17 +7,13 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageTags>url;uri;whatwg;web;internet;browser;parser;html</PackageTags>
         <RepositoryType>git</RepositoryType>
-        <RepositoryUrl>https://github.com/Dubzer/whaaaaaaaaaaturl</RepositoryUrl>
-        <PackageReleaseNotes>https://github.com/Dubzer/whaaaaaaaaaaturl/releases</PackageReleaseNotes>
+        <RepositoryUrl>https://github.com/Dubzer/Dubzer.WhatwgUrl</RepositoryUrl>
+        <PackageReleaseNotes>https://github.com/Dubzer/Dubzer.WhatwgUrl/releases</PackageReleaseNotes>
 
         <IsAotCompatible>true</IsAotCompatible>
 		<IsPackable>true</IsPackable>
         <NoWarn>CA1032;CA1054;CA1308</NoWarn>
     </PropertyGroup>
-
-    <ItemGroup Label="References">
-        <PackageReference Include="Nunycode" Version="1.1.0" />
-    </ItemGroup>
 
 	<ItemGroup Label="Resources">
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />

@@ -2,62 +2,62 @@
 <links>
     <remarks name="Origin">
         When the scheme is <c>file</c> returns the string <c>"null"</c><br/>
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#origin">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#origin">See docs for more info</a>
     </remarks>
     <remarks name="Username">
         When the username is not present in the input URL, the returned value will be an empty string<br/>
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#username">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#username">See docs for more info</a>
     </remarks>
     <remarks name="Password">
         When the password is not present in the input URL, the returned value will be an empty string<br/>
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#password">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#password">See docs for more info</a>
     </remarks>
     <remarks name="Host">
         For some protocols, when specified port is the default one, it will not be included.
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#host">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#host">See docs for more info</a>
     </remarks>
     <remarks name="Hostname">
         Does not include the port number<br/>
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#hostname">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#hostname">See docs for more info</a>
     </remarks>
     <remarks name="Port">
         For some protocols, when specified port is the default one, the returned value will be an empty string.<br/>
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#port">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#port">See docs for more info</a>
     </remarks>
     <remarks name="Pathname">
         If there was a trailing slash in the input, it will be included.<br/>
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#pathname">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#pathname">See docs for more info</a>
     </remarks>
     <remarks name="Search">
         If there was a query in the input, the string will start with the prefix <c>?</c>.<br/>
         Otherwise, it will be an empty string.<br/>
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#search">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#search">See docs for more info</a>
     </remarks>
     <remarks name="Hash">
         If there was a hash in the input, the string will start with the prefix <c>#</c>.<br/>
         Otherwise, it will be an empty string.<br/>
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#hash">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#hash">See docs for more info</a>
     </remarks>
     <remarks name="Protocol">
         It <b>always</b> ends with a <c>:</c><br/>
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#protocol">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#protocol">See docs for more info</a>
     </remarks>
     <remarks name="Href">
         It will contain all the parts of the URL mentioned above.
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#href">See docs for more info</a>
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#href">See docs for more info</a>
     </remarks>
     <remarks name="TryCreate">
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#bool-trycreatestring-input-out-domurl-result">
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#bool-trycreatestring-input-out-domurl-result">
             See docs for more info
         </a>
     </remarks>
     <remarks name="TryCreateObjectBase">
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#bool-trycreatestring-input-domurl-baseurl-out-domurl-result">
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#bool-trycreatestring-input-domurl-baseurl-out-domurl-result">
             See docs for more info
         </a>
     </remarks>
     <remarks name="TryCreateStringBase">
-        <a href="https://github.com/Dubzer/whaaaaaaaaaaturl/blob/master/docs/main.md#bool-trycreatestring-input-string-baseurl-out-domurl-result">
+        <a href="https://github.com/Dubzer/Dubzer.WhatwgUrl/blob/master/docs/main.md#bool-trycreatestring-input-string-baseurl-out-domurl-result">
             See docs for more info
         </a>
     </remarks>
