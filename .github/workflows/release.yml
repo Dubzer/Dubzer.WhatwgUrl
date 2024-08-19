@@ -18,6 +18,12 @@ jobs:
       - uses: 'actions/setup-dotnet@v4'
         with:
           dotnet-version: '8.x'
+      - name: 'Replace relative links to docs with absolute ones'
+        uses: richardrigutins/replace-in-files@v2
+        with:
+          files: 'README.md'
+          replacement-text: '(https://github.com/Dubzer/Dubzer.WhatwgUrl/tree/${{ github.event.release.tag_name }}/docs/'
+          search-text: '(docs/'
       - name: 'Build package'
         run: dotnet pack -c Release /p:Version=${{ github.event.release.tag_name }} /p:PackageReleaseNotes=${{ github.event.release.html_url }} /p:RepositoryUrl=${{ github.event.repository.html_url }}
       - name: 'Add Github NuGet source'

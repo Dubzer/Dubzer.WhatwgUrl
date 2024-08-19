@@ -49,7 +49,7 @@ The WHATWG URL specification aims to solve this problem by providing a common gr
 
 ## Documentation
 
-[Click here](./docs/main.md) for API documentation 🐈
+[Click here](docs/main.md) for API documentation 🐈
 
 ## Examples
 
