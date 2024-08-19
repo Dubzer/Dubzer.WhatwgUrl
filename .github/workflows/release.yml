@@ -1,0 +1,26 @@
+name: 'Release'
+run-name: 'Publish release ${{ github.event.release.tag_name }} to NuGet'
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  release:
+    types: ['created']
+
+jobs:
+  publish:
+    name: 'Build and publish to NuGet'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - uses: 'actions/checkout@v4'
+      - uses: 'actions/setup-dotnet@v4'
+        with:
+          dotnet-version: '8.x'
+      - name: 'Build package'
+        run: dotnet pack -c Release /p:Version=${{ github.event.release.tag_name }} /p:PackageReleaseNotes=${{ github.event.release.html_url }} /p:RepositoryUrl=${{ github.event.repository.html_url }}
+      - name: 'Add Github NuGet source'
+        run: dotnet nuget add source --username Dubzer --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/Dubzer/index.json"
+      - name: 'Publish package to Github Packages'
+        run: dotnet nuget push -s github --api-key ${{ secrets.GITHUB_TOKEN }} artifacts/package/release/*.nupkg

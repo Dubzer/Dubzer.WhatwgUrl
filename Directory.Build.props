@@ -1,0 +1,9 @@
+<Project>
+    <PropertyGroup>
+        <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+        <IsPackable>false</IsPackable>
+        <Nullable>enable</Nullable>
+        <TargetFramework>net8.0</TargetFramework>
+        <UseArtifactsOutput>true</UseArtifactsOutput>
+    </PropertyGroup>
+</Project>
