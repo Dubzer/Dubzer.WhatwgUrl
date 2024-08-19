@@ -15,23 +15,23 @@ internal sealed class InternalUrlRune : InternalUrl
 
     public override Result<InternalUrl> Parse(string input, InternalUrl? baseUrl = null)
     {
-        _baseUrl = baseUrl;
+        BaseUrl = baseUrl;
 
-        _input = InputUtils.Format(input);
-        _buf = new StringBuilder(_input.Length);
+        Input = InputUtils.Format(input);
+        Buf = new StringBuilder(Input.Length);
 
-        _inputRunes = _input.EnumerateRunes().ToArray();
-        _length = _inputRunes.Length;
+        _inputRunes = Input.EnumerateRunes().ToArray();
+        Length = _inputRunes.Length;
 
-        for (; _pointer <= _length; _pointer++)
+        for (; Pointer <= Length; Pointer++)
         {
-            _currentRune = _pointer < _length ? _inputRunes[_pointer] : new Rune('\u0000');
+            _currentRune = Pointer < Length ? _inputRunes[Pointer] : new Rune('\u0000');
             var c = _currentRune.ToChar();
 
-            Debug.WriteLine($"State: {_state}, rune: {_currentRune}");
+            Debug.WriteLine($"State: {State}, rune: {_currentRune}");
             RunStateMachine(c);
-            if (_error != null)
-                return Result<InternalUrl>.Failure(_error.Value);
+            if (Error != null)
+                return Result<InternalUrl>.Failure(Error.Value);
         }
 
         return Result<InternalUrl>.Success(this);
@@ -43,17 +43,17 @@ internal sealed class InternalUrlRune : InternalUrl
     // 100k benchmark, which is critical
     protected override void AppendCurrent(char c)
     {
-        _buf.AppendRune(_currentRune);
+        Buf.AppendRune(_currentRune);
     }
 
     protected override void AppendCurrentEncoded(char c, FrozenSet<char> set)
     {
-        PercentEncoding.AppendEncoded(_currentRune, _buf, set);
+        PercentEncoding.AppendEncoded(_currentRune, Buf, set);
     }
 
     protected override void AppendCurrentEncodedInC0(char c)
     {
-        PercentEncoding.AppendEncodedInC0(_currentRune, _buf);
+        PercentEncoding.AppendEncodedInC0(_currentRune, Buf);
     }
 
     protected override void AuthorityState(char c)
@@ -61,62 +61,62 @@ internal sealed class InternalUrlRune : InternalUrl
         if (c == '@')
         {
             Debug.WriteLine("invalid-credentials");
-            if (_atSignSeen)
-                _buf.Insert(0, "%40");
+            if (AtSignSeen)
+                Buf.Insert(0, "%40");
             else
-                _atSignSeen = true;
+                AtSignSeen = true;
 
-            _authorityStringBuilder ??= new StringBuilder();
-            foreach (var rune in _buf.ToString().EnumerateRunes())
+            AuthorityStringBuilder ??= new StringBuilder();
+            foreach (var rune in Buf.ToString().EnumerateRunes())
             {
-                if (rune == new Rune(':') && !_passwordTokenSeen)
+                if (rune == new Rune(':') && !PasswordTokenSeen)
                 {
-                    Username = _authorityStringBuilder.ToString();
-                    _authorityStringBuilder.Clear();
-                    _passwordTokenSeen = true;
+                    Username = AuthorityStringBuilder.ToString();
+                    AuthorityStringBuilder.Clear();
+                    PasswordTokenSeen = true;
                     continue;
                 }
 
-                PercentEncoding.AppendEncoded(rune, _authorityStringBuilder, PercentEncoding.UserInfoEncodeSet);
+                PercentEncoding.AppendEncoded(rune, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSet);
             }
 
-            _buf.Clear();
+            Buf.Clear();
         }
-        else if (c is '/' or '?' or '#' || (IsSpecial && c == '\\') || _pointer == _length)
+        else if (c is '/' or '?' or '#' || (IsSpecial && c == '\\') || Pointer == Length)
         {
-            if (_atSignSeen && _buf.Length == 0)
+            if (AtSignSeen && Buf.Length == 0)
             {
-                _error = UrlErrorCode.HostMissing;
+                Error = UrlErrorCode.HostMissing;
                 return;
             }
 
-            if (_authorityStringBuilder != null)
+            if (AuthorityStringBuilder != null)
             {
-                if (!_passwordTokenSeen)
+                if (!PasswordTokenSeen)
                 {
-                    Username = _authorityStringBuilder!.ToString();
+                    Username = AuthorityStringBuilder!.ToString();
                 }
                 else
                 {
-                    Password = _authorityStringBuilder!.ToString();
+                    Password = AuthorityStringBuilder!.ToString();
                 }
 
-                _authorityStringBuilder.Clear();
+                AuthorityStringBuilder.Clear();
             }
 
-            _pointer -= _buf.ToString().EnumerateRunes().Count() + 1;
-            _buf.Clear();
-            _state = InternalUrlParserState.Host;
+            Pointer -= Buf.ToString().EnumerateRunes().Count() + 1;
+            Buf.Clear();
+            State = InternalUrlParserState.Host;
         }
         else
         {
-            _buf.AppendRune(_currentRune);
+            Buf.AppendRune(_currentRune);
         }
     }
 
     // helper with bound guard
     protected override char NextChar(int n) =>
-        _pointer + n >= _length
+        Pointer + n >= Length
             ? '\0'
-            : _inputRunes[_pointer + n].ToChar();
+            : _inputRunes[Pointer + n].ToChar();
 }

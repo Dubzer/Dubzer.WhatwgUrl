@@ -90,15 +90,15 @@ sb.Clear();
 
 (uint Start, uint? End) GetCodePoint(string input)
 {
-    const string Separator = "..";
-    var separatorIndex = input.IndexOf(Separator, StringComparison.Ordinal);
+    const string separator = "..";
+    var separatorIndex = input.IndexOf(separator, StringComparison.Ordinal);
     if (separatorIndex == -1)
     {
         return (uint.Parse(input, NumberStyles.HexNumber, CultureInfo.InvariantCulture), null);
     }
 
     return (uint.Parse(input[..separatorIndex], NumberStyles.HexNumber, CultureInfo.InvariantCulture),
-        uint.Parse(input[(separatorIndex + Separator.Length)..], NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+        uint.Parse(input[(separatorIndex + separator.Length)..], NumberStyles.HexNumber, CultureInfo.InvariantCulture));
 }
 
 IdnaStatus GetStatus(string input) => input switch

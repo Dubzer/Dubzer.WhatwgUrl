@@ -13,8 +13,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Files", "Solution Files", "{B883CFD4-CEC5-4BA9-8660-F6A11FBB8182}"
 	ProjectSection(SolutionItems) = preProject
 		Directory.Build.props = Directory.Build.props
-		meow.sln.DotSettings = meow.sln.DotSettings
-		readme.md = readme.md
+		Dubzer.WhatwgUrl.sln.DotSettings = Dubzer.WhatwgUrl.sln.DotSettings
+		README.md = README.md
 	EndProjectSection
 EndProject
 Global

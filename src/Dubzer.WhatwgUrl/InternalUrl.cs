@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -18,21 +17,21 @@ internal class InternalUrl
     internal string Username = "";
     internal string Password = "";
 
-    protected UrlErrorCode? _error;
+    protected UrlErrorCode? Error;
 
-    protected int _pointer;
-    protected InternalUrlParserState _state = InternalUrlParserState.SchemeStart;
-    protected StringBuilder _buf = null!;
-    protected StringBuilder? _authorityStringBuilder;
-    protected string _input = "";
-    protected int _length;
+    protected int Pointer;
+    protected InternalUrlParserState State = InternalUrlParserState.SchemeStart;
+    protected StringBuilder Buf = null!;
+    protected StringBuilder? AuthorityStringBuilder;
+    protected string Input = "";
+    protected int Length;
 
     protected bool IsSpecial => Schemes.Special.ContainsKey(Scheme);
 
-    protected InternalUrl? _baseUrl;
+    protected InternalUrl? BaseUrl;
 
-    protected bool _atSignSeen;
-    protected bool _passwordTokenSeen;
+    protected bool AtSignSeen;
+    protected bool PasswordTokenSeen;
 
     /// <summary>
     /// Pointer is inside an array (ipv6)
@@ -44,21 +43,21 @@ internal class InternalUrl
 
     public virtual Result<InternalUrl> Parse(string input, InternalUrl? baseUrl = null)
     {
-        _baseUrl = baseUrl;
+        BaseUrl = baseUrl;
 
-        _input = InputUtils.Format(input);
-        _buf = new StringBuilder(_input.Length);
+        Input = InputUtils.Format(input);
+        Buf = new StringBuilder(Input.Length);
 
-        _length = _input.Length;
+        Length = Input.Length;
 
-        for (; _pointer <= _length; _pointer++)
+        for (; Pointer <= Length; Pointer++)
         {
-            var c = _pointer < _length ? _input[_pointer] : '\0';
+            var c = Pointer < Length ? Input[Pointer] : '\0';
 
-            Debug.WriteLine($"State: {_state}, char: {c}");
+            Debug.WriteLine($"State: {State}, char: {c}");
             RunStateMachine(c);
-            if (_error != null)
-                return Result<InternalUrl>.Failure(_error.Value);
+            if (Error != null)
+                return Result<InternalUrl>.Failure(Error.Value);
         }
 
         return Result<InternalUrl>.Success(this);
@@ -66,24 +65,24 @@ internal class InternalUrl
 
     protected virtual void AppendCurrent(char c)
     {
-        _buf.Append(c);
+        Buf.Append(c);
     }
 
     protected virtual void AppendCurrentEncoded(char c, FrozenSet<char> set)
     {
-        PercentEncoding.AppendEncoded(c, _buf, set);
+        PercentEncoding.AppendEncoded(c, Buf, set);
     }
 
     protected virtual void AppendCurrentEncodedInC0(char c)
     {
-        PercentEncoding.AppendEncodedInC0(c, _buf);
+        PercentEncoding.AppendEncodedInC0(c, Buf);
     }
 
     #region State machine switch
 
         protected void RunStateMachine(char c)
     {
-        switch (_state)
+        switch (State)
         {
             case InternalUrlParserState.SchemeStart:
                 SchemeStartState(c);
@@ -177,15 +176,15 @@ internal class InternalUrl
     {
         if (char.IsAsciiLetter(c))
         {
-            _buf.Append(char.ToLowerInvariant(c));
-            _state = InternalUrlParserState.Scheme;
+            Buf.Append(char.ToLowerInvariant(c));
+            State = InternalUrlParserState.Scheme;
         }
         // (the state override is not supported, thus it will the last branch of this state)
         // Otherwise, if state override is not given, set state to no scheme state and decrease pointer by 1.
         else
         {
-            _state = InternalUrlParserState.NoScheme;
-            --_pointer;
+            State = InternalUrlParserState.NoScheme;
+            --Pointer;
         }
     }
 
@@ -195,7 +194,7 @@ internal class InternalUrl
         // 1. If c is an ASCII alphanumeric, U+002B (+), U+002D (-), or U+002E (.),
         if (char.IsAsciiLetterOrDigit(c) || c is '+' or '-' or '.')
         {
-            _buf.Append(char.ToLowerInvariant(c));   // append c, lowercased, to buffer.
+            Buf.Append(char.ToLowerInvariant(c));   // append c, lowercased, to buffer.
         }
         // 2. Otherwise, if c is U+003A (:), then:
         else if (c == ':')
@@ -203,12 +202,12 @@ internal class InternalUrl
             // currently not supporting state override
 
             // 2. Set url’s scheme to buffer.
-            Scheme = _buf.ToString();
+            Scheme = Buf.ToString();
 
             // skipping state override here too
 
             // 4. Set buffer the empty string.
-            _buf.Clear();
+            Buf.Clear();
 
             if (Scheme == Schemes.File)
             {
@@ -216,45 +215,45 @@ internal class InternalUrl
                 if (NextChar(1) != '/' || NextChar(2) != '/')
                     Debug.WriteLine("special-scheme-missing-following-solidus");
 
-                _state = InternalUrlParserState.File;
+                State = InternalUrlParserState.File;
             }
             // 6. Otherwise, if url is special, base is non-null, and base’s scheme is url’s scheme:
-            else if (IsSpecial && _baseUrl?.Scheme == Scheme)
+            else if (IsSpecial && BaseUrl?.Scheme == Scheme)
             {
                 // Assert: base is special (and therefore does not have an opaque path).
 
-                _state = InternalUrlParserState.SpecialRelativeOrAuthority;
+                State = InternalUrlParserState.SpecialRelativeOrAuthority;
             }
             else if (IsSpecial)
             {
-                if (_baseUrl != null && _baseUrl.Scheme == Scheme)
+                if (BaseUrl != null && BaseUrl.Scheme == Scheme)
                 {
-                    _state = InternalUrlParserState.SpecialAuthoritySlashes;
+                    State = InternalUrlParserState.SpecialAuthoritySlashes;
                     return;
                 }
 
-                _state = InternalUrlParserState.SpecialAuthoritySlashes;
+                State = InternalUrlParserState.SpecialAuthoritySlashes;
             }
             // 8. Otherwise, if remaining starts with an U+002F (/),
             // set state to path or authority state and increase pointer by 1.
             else if (NextChar(1) == '/')
             {
-                _state = InternalUrlParserState.PathOrAuthority;
-                _pointer++;
+                State = InternalUrlParserState.PathOrAuthority;
+                Pointer++;
             }
             else
             {
                 // set url’s path to the empty string
-                _state = InternalUrlParserState.OpaquePath;
+                State = InternalUrlParserState.OpaquePath;
             }
         }
         // (the state override is not supported, thus it will the last branch of this state)
         // Otherwise, if state override is not given,
         else
         {
-            _buf.Clear();  // set buffer to the empty string
-            _state = InternalUrlParserState.NoScheme; // state to no scheme state
-            _pointer = -1;  // and start over (from the first code point in input).
+            Buf.Clear();  // set buffer to the empty string
+            State = InternalUrlParserState.NoScheme; // state to no scheme state
+            Pointer = -1;  // and start over (from the first code point in input).
         }
     }
 
@@ -262,87 +261,87 @@ internal class InternalUrl
     protected void NoSchemeState(char c)
     {
         // If base is null, or base has an opaque path and c is not U+0023 (#)
-        if (_baseUrl == null || (_baseUrl._opaquePath != null && c != '#'))
+        if (BaseUrl == null || (BaseUrl._opaquePath != null && c != '#'))
         {
-            _error = UrlErrorCode.MissingSchemeNonRelativeUrl;
+            Error = UrlErrorCode.MissingSchemeNonRelativeUrl;
             return;
         }
 
         // Otherwise, if base has an opaque path and c is U+0023 (#),
-        if (_baseUrl._opaquePath != null && c == '#')
+        if (BaseUrl._opaquePath != null && c == '#')
         {
-            Scheme = _baseUrl.Scheme; // set url’s scheme to base’s scheme,
+            Scheme = BaseUrl.Scheme; // set url’s scheme to base’s scheme,
 
             // (since base has an opaque path, setting it instead of the _path)
-            _opaquePath = _baseUrl._opaquePath; // url’s path to base’s path,
+            _opaquePath = BaseUrl._opaquePath; // url’s path to base’s path,
 
-            Query = _baseUrl.Query;   // url’s query to base’s query,
-            _buf.EnsureCapacity(_length - _pointer); // url’s fragment to the empty string,
+            Query = BaseUrl.Query;   // url’s query to base’s query,
+            Buf.EnsureCapacity(Length - Pointer); // url’s fragment to the empty string,
 
-            _state = InternalUrlParserState.Fragment; // and set state to fragment state.
+            State = InternalUrlParserState.Fragment; // and set state to fragment state.
             return;
         }
 
-        _state = _baseUrl.Scheme != Schemes.File
+        State = BaseUrl.Scheme != Schemes.File
             ? InternalUrlParserState.Relative // if base’s scheme is not "file", set state to relative state
             : InternalUrlParserState.File;    // Otherwise, set state to file state
 
-        _pointer--; // and decrease pointer by 1.
+        Pointer--; // and decrease pointer by 1.
     }
 
     // https://url.spec.whatwg.org/#path-or-authority-state
     protected void PathOrAuthorityState(char c)
     {
         if (c == '/')
-            _state = InternalUrlParserState.Authority;
+            State = InternalUrlParserState.Authority;
         else
         {
-            _state = InternalUrlParserState.Path;
-            _pointer--;
+            State = InternalUrlParserState.Path;
+            Pointer--;
         }
     }
 
     // https://url.spec.whatwg.org/#relative-state
     protected void RelativeState(char c)
     {
-        Debug.WriteLineIf(_baseUrl!.Scheme != Schemes.File,
+        Debug.WriteLineIf(BaseUrl!.Scheme != Schemes.File,
             "Failed: base’s scheme is not \"file\".");
 
-        Scheme = _baseUrl.Scheme;
+        Scheme = BaseUrl.Scheme;
 
         if (c == '/')
         {
-            _state = InternalUrlParserState.RelativeSlash;
+            State = InternalUrlParserState.RelativeSlash;
         }
         else if (IsSpecial && c == '\\')
         {
             Debug.WriteLine("invalid-reverse-solidus");
-            _state = InternalUrlParserState.RelativeSlash;
+            State = InternalUrlParserState.RelativeSlash;
         }
         else
         {
-            Username = _baseUrl.Username;
-            Password = _baseUrl.Password;
-            Host = _baseUrl.Host;
-            Port = _baseUrl.Port;
-            _path = [.._baseUrl._path];
-            Query = _baseUrl.Query;
+            Username = BaseUrl.Username;
+            Password = BaseUrl.Password;
+            Host = BaseUrl.Host;
+            Port = BaseUrl.Port;
+            _path = [..BaseUrl._path];
+            Query = BaseUrl.Query;
 
             if (c == '?')
             {
-                _state = InternalUrlParserState.Query;
+                State = InternalUrlParserState.Query;
             }
             else if (c == '#')
             {
-                _buf.EnsureCapacity(_length - _pointer);
-                _state = InternalUrlParserState.Fragment;
+                Buf.EnsureCapacity(Length - Pointer);
+                State = InternalUrlParserState.Fragment;
             }
             else if (c != '\u0000')
             {
                 Query = null;
                 ShortenPath();
-                _state = InternalUrlParserState.Path;
-                _pointer--;
+                State = InternalUrlParserState.Path;
+                Pointer--;
             }
         }
     }
@@ -353,19 +352,19 @@ internal class InternalUrl
         if (IsSpecial && c is '/' or '\\')
         {
             Debug.WriteLineIf(c == '\\', "invalid-reverse-solidus");
-            _state = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
+            State = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
         }
         else if (c == '/')
-            _state = InternalUrlParserState.Authority;
+            State = InternalUrlParserState.Authority;
         else
         {
-            Username = _baseUrl!.Username;
-            Password = _baseUrl!.Password;
-            Host = _baseUrl!.Host;
-            Port = _baseUrl!.Port;
+            Username = BaseUrl!.Username;
+            Password = BaseUrl!.Password;
+            Host = BaseUrl!.Host;
+            Port = BaseUrl!.Port;
 
-            _state = InternalUrlParserState.Path;
-            _pointer--;
+            State = InternalUrlParserState.Path;
+            Pointer--;
         }
     }
 
@@ -374,14 +373,14 @@ internal class InternalUrl
     {
         if (c == '/' && NextChar(1) == '/')
         {
-            _state = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
-            _pointer++;
+            State = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
+            Pointer++;
         }
         else
         {
             Debug.WriteLine("special-scheme-missing-following-solidus");
-            _state = InternalUrlParserState.Relative;
-            _pointer--;
+            State = InternalUrlParserState.Relative;
+            Pointer--;
         }
     }
 
@@ -390,14 +389,14 @@ internal class InternalUrl
     {
         if (c == '/' && NextChar(1) == '/')
         {
-            _pointer++;
-            _state = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
+            Pointer++;
+            State = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
         }
         else
         {
             Debug.WriteLine("special-scheme-missing-following-solidus");
-            _state = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
-            _pointer--;
+            State = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
+            Pointer--;
         }
     }
 
@@ -406,8 +405,8 @@ internal class InternalUrl
     {
         if (c is not '/' and not '\\')
         {
-            _state = InternalUrlParserState.Authority;
-            _pointer--;
+            State = InternalUrlParserState.Authority;
+            Pointer--;
         }
         else
         {
@@ -421,54 +420,54 @@ internal class InternalUrl
         if (c == '@')
         {
             Debug.WriteLine("invalid-credentials");
-            if (_atSignSeen)
-                _buf.Insert(0, "%40");
+            if (AtSignSeen)
+                Buf.Insert(0, "%40");
             else
-                _atSignSeen = true;
+                AtSignSeen = true;
 
-            _authorityStringBuilder ??= new StringBuilder();
-            foreach (var chunk in _buf.GetChunks())
+            AuthorityStringBuilder ??= new StringBuilder();
+            foreach (var chunk in Buf.GetChunks())
             {
                 foreach (var bufC in chunk.Span)
                 {
-                    if (bufC == ':' && !_passwordTokenSeen)
+                    if (bufC == ':' && !PasswordTokenSeen)
                     {
-                        Username = _authorityStringBuilder.ToString();
-                        _authorityStringBuilder.Clear();
-                        _passwordTokenSeen = true;
+                        Username = AuthorityStringBuilder.ToString();
+                        AuthorityStringBuilder.Clear();
+                        PasswordTokenSeen = true;
                         continue;
                     }
 
-                    PercentEncoding.AppendEncoded(bufC, _authorityStringBuilder, PercentEncoding.UserInfoEncodeSet);
+                    PercentEncoding.AppendEncoded(bufC, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSet);
                 }
             }
 
-            _buf.Clear();
+            Buf.Clear();
         }
-        else if (c is '/' or '?' or '#' || (IsSpecial && c == '\\') || _pointer == _length)
+        else if (c is '/' or '?' or '#' || (IsSpecial && c == '\\') || Pointer == Length)
         {
-            if (_atSignSeen && _buf.Length == 0)
+            if (AtSignSeen && Buf.Length == 0)
             {
-                _error = UrlErrorCode.HostMissing;
+                Error = UrlErrorCode.HostMissing;
                 return;
             }
 
-            if (_authorityStringBuilder != null)
+            if (AuthorityStringBuilder != null)
             {
-                if (!_passwordTokenSeen)
+                if (!PasswordTokenSeen)
                 {
-                    Username = _authorityStringBuilder!.ToString();
+                    Username = AuthorityStringBuilder!.ToString();
                 } else
                 {
-                    Password = _authorityStringBuilder!.ToString();
+                    Password = AuthorityStringBuilder!.ToString();
                 }
 
-                _authorityStringBuilder.Clear();
+                AuthorityStringBuilder.Clear();
             }
 
-            _pointer -= _buf.Length + 1;
-            _buf.Clear();
-            _state = InternalUrlParserState.Host;
+            Pointer -= Buf.Length + 1;
+            Buf.Clear();
+            State = InternalUrlParserState.Host;
         }
         else
         {
@@ -481,43 +480,43 @@ internal class InternalUrl
     {
         if (c == ':' && !_arrFlag)
         {
-            if (_buf.Length == 0)
+            if (Buf.Length == 0)
             {
-                _error = UrlErrorCode.HostMissing;
+                Error = UrlErrorCode.HostMissing;
                 return;
             }
 
-            var parseResult = HostParser.Parse(_buf.ToString(), true);
+            var parseResult = HostParser.Parse(Buf.ToString(), true);
             if (!parseResult)
             {
-                _error = parseResult.Error;
+                Error = parseResult.Error;
                 return;
             }
 
             Host = parseResult.Value;
-            _buf.Clear();
-            _state = InternalUrlParserState.Port;
+            Buf.Clear();
+            State = InternalUrlParserState.Port;
         }
-        else if (c is '/' or '?' or '#' || IsSpecial && c == '\\' || _pointer == _length)
+        else if (c is '/' or '?' or '#' || IsSpecial && c == '\\' || Pointer == Length)
         {
-            _pointer--;
+            Pointer--;
 
-            if (IsSpecial && _buf.Length == 0)
+            if (IsSpecial && Buf.Length == 0)
             {
-                _error = UrlErrorCode.HostMissing;
+                Error = UrlErrorCode.HostMissing;
                 return;
             }
 
-            var parseResult = HostParser.Parse(_buf.ToString(), !IsSpecial);
+            var parseResult = HostParser.Parse(Buf.ToString(), !IsSpecial);
             if (!parseResult)
             {
-                _error = parseResult.Error;
+                Error = parseResult.Error;
                 return;
             }
 
             Host = parseResult.Value;
-            _buf.Clear();
-            _state = InternalUrlParserState.PathStart;
+            Buf.Clear();
+            State = InternalUrlParserState.PathStart;
         }
         else
         {
@@ -535,17 +534,17 @@ internal class InternalUrl
     {
         if (char.IsAsciiDigit(c))
         {
-            _buf.Append(c);
+            Buf.Append(c);
         }
         // pointer is past the port, which means we can parse it
-        else if (_pointer == _length || c is '/' or '?' or '#' || IsSpecial && c == '\\')
+        else if (Pointer == Length || c is '/' or '?' or '#' || IsSpecial && c == '\\')
         {
-            if (_buf.Length != 0)
+            if (Buf.Length != 0)
             {
                 // 2. If port is greater than 2^16 − 1
-                if (!ushort.TryParse(_buf.ToString(), CultureInfo.InvariantCulture, out var port))
+                if (!ushort.TryParse(Buf.ToString(), CultureInfo.InvariantCulture, out var port))
                 {
-                    _error = UrlErrorCode.PortOutOfRange;
+                    Error = UrlErrorCode.PortOutOfRange;
                     return;
                 }
 
@@ -554,16 +553,16 @@ internal class InternalUrl
                 else
                     Port = port;
 
-                _buf.Clear();
+                Buf.Clear();
             }
             // If state override is given, then return.
 
-            _state = InternalUrlParserState.PathStart;
-            _pointer--;
+            State = InternalUrlParserState.PathStart;
+            Pointer--;
         }
         else
         {
-            _error = UrlErrorCode.PortInvalid;
+            Error = UrlErrorCode.PortInvalid;
         }
     }
 
@@ -576,27 +575,27 @@ internal class InternalUrl
         if (c is '/' or '\\')
         {
             Debug.WriteLineIf(c == '\\', "invalid-reverse-solidus");
-            _state = InternalUrlParserState.FileSlash;
+            State = InternalUrlParserState.FileSlash;
         }
-        else if (_baseUrl is { Scheme: Schemes.File })
+        else if (BaseUrl is { Scheme: Schemes.File })
         {
-            Host = _baseUrl.Host;
-            _path = [.._baseUrl._path];
-            Query = _baseUrl.Query;
+            Host = BaseUrl.Host;
+            _path = [..BaseUrl._path];
+            Query = BaseUrl.Query;
             if (c == '?')
             {
-                _state = InternalUrlParserState.Query;
+                State = InternalUrlParserState.Query;
             }
             else if (c == '#')
             {
-                _buf.EnsureCapacity(_length - _pointer);
-                _state = InternalUrlParserState.Fragment;
+                Buf.EnsureCapacity(Length - Pointer);
+                State = InternalUrlParserState.Fragment;
             }
             else if (c != '\u0000')
             {
                 Query = null;
                 // If the code point substring from pointer to the end of input does not start with a Windows drive letter
-                if (!StartsWithAWindowsDriveLetter(_input.AsSpan()[_pointer..]))
+                if (!StartsWithAWindowsDriveLetter(Input.AsSpan()[Pointer..]))
                     ShortenPath();
                 else
                 {
@@ -607,14 +606,14 @@ internal class InternalUrl
                     _path.Clear();
                 }
 
-                _state = InternalUrlParserState.Path;
-                _pointer--;
+                State = InternalUrlParserState.Path;
+                Pointer--;
             }
         }
         else
         {
-            _state = InternalUrlParserState.Path;
-            _pointer--;
+            State = InternalUrlParserState.Path;
+            Pointer--;
         }
     }
 
@@ -626,55 +625,55 @@ internal class InternalUrl
             if (c == '\\')
                 Debug.WriteLine("invalid-reverse-solidus");
 
-            _state = InternalUrlParserState.FileHost;
+            State = InternalUrlParserState.FileHost;
         }
         else
         {
-            if (_baseUrl is { Scheme: Schemes.File })
+            if (BaseUrl is { Scheme: Schemes.File })
             {
-                Host = _baseUrl.Host;
+                Host = BaseUrl.Host;
 
                 // If the code point substring from pointer to the end of input does not start with a Windows drive letter
-                if (!StartsWithAWindowsDriveLetter(_input.AsSpan()[_pointer..])
+                if (!StartsWithAWindowsDriveLetter(Input.AsSpan()[Pointer..])
                     // and base’s path[0] is a normalized Windows drive letter,
-                    && IsNormalizedWindowDriveLetter(_baseUrl._path[0]))
+                    && IsNormalizedWindowDriveLetter(BaseUrl._path[0]))
                 {
                     // then append base’s path[0] to url’s path.
-                    _path.Add(_baseUrl._path[0]);
+                    _path.Add(BaseUrl._path[0]);
                 }
             }
 
-            _state = InternalUrlParserState.Path;
-            _pointer--;
+            State = InternalUrlParserState.Path;
+            Pointer--;
         }
     }
 
     // https://url.spec.whatwg.org/#file-host-state
     private void FileHostState(char c)
     {
-        if (_pointer == _length || c is '/' or '\\' || c == '?' || c == '#')
+        if (Pointer == Length || c is '/' or '\\' || c == '?' || c == '#')
         {
-            _pointer--;
+            Pointer--;
             // state override here
-            if (_buf.Length == 2 && char.IsAsciiLetter(_buf[0]) && _buf[1] is ':' or '|')
+            if (Buf.Length == 2 && char.IsAsciiLetter(Buf[0]) && Buf[1] is ':' or '|')
             {
                 Debug.WriteLine("file-invalid-Windows-drive-letter-host");
-                _state = InternalUrlParserState.Path;
+                State = InternalUrlParserState.Path;
                 return;
             }
 
-            if (_buf.Length == 0)
+            if (Buf.Length == 0)
             {
                 Host = "";
                 // If state override is given, then return.
-                _state = InternalUrlParserState.PathStart;
+                State = InternalUrlParserState.PathStart;
                 return;
             }
 
-            var parseResult = HostParser.Parse(_buf.ToString(), !IsSpecial);
+            var parseResult = HostParser.Parse(Buf.ToString(), !IsSpecial);
             if (!parseResult)
             {
-                _error = parseResult.Error;
+                Error = parseResult.Error;
                 return;
             }
 
@@ -683,8 +682,8 @@ internal class InternalUrl
                 : parseResult.Value;
 
             // If state override is given, then return.
-            _buf.Clear();
-            _state = InternalUrlParserState.PathStart;
+            Buf.Clear();
+            State = InternalUrlParserState.PathStart;
         }
         else
         {
@@ -700,36 +699,36 @@ internal class InternalUrl
             if (c == '\\')
                 Debug.WriteLine("invalid-reverse-solidus");
 
-            _state = InternalUrlParserState.Path;
+            State = InternalUrlParserState.Path;
             if (c != '/' && c != '\\')
-                _pointer--;
+                Pointer--;
         }
         else if (c == '?')
         {
-            _state = InternalUrlParserState.Query;
+            State = InternalUrlParserState.Query;
         }
         else if (c == '#')
         {
-            _buf.EnsureCapacity(_length - _pointer);
-            _state = InternalUrlParserState.Fragment;
+            Buf.EnsureCapacity(Length - Pointer);
+            State = InternalUrlParserState.Fragment;
         }
-        else if (_pointer != _length)
+        else if (Pointer != Length)
         {
-            _state = InternalUrlParserState.Path;
+            State = InternalUrlParserState.Path;
             if (c != '/')
-                _pointer--;
+                Pointer--;
         }
     }
 
     // https://url.spec.whatwg.org/#path-state
     private void PathState(char c)
     {
-        if (_pointer == _length || c is '/' or '?' or '#' || (c == '\\' && IsSpecial))
+        if (Pointer == Length || c is '/' or '?' or '#' || (c == '\\' && IsSpecial))
         {
             if (IsSpecial && c == '\\')
                 Debug.WriteLine("invalid-reverse-solidus");
 
-            var str = _buf.ToString();
+            var str = Buf.ToString();
             if (Util.IsDoubleDot(str))
             {
                 ShortenPath();
@@ -755,15 +754,15 @@ internal class InternalUrl
                 _path.Add(str);
             }
 
-            _buf.Clear();
+            Buf.Clear();
             switch (c)
             {
                 case '?':
-                    _state = InternalUrlParserState.Query;
+                    State = InternalUrlParserState.Query;
                     break;
                 case '#':
-                    _buf.EnsureCapacity(_length - _pointer);
-                    _state = InternalUrlParserState.Fragment;
+                    Buf.EnsureCapacity(Length - Pointer);
+                    State = InternalUrlParserState.Fragment;
                     break;
             }
         }
@@ -782,20 +781,20 @@ internal class InternalUrl
     {
         if (c == '?')
         {
-            _opaquePath = _buf.ToString();
-            _buf.Clear();
-            _state = InternalUrlParserState.Query;
+            _opaquePath = Buf.ToString();
+            Buf.Clear();
+            State = InternalUrlParserState.Query;
         }
         else if (c == '#')
         {
-            _opaquePath = _buf.ToString();
-            _buf.Clear();
-            _buf.EnsureCapacity(_length - _pointer);
-            _state = InternalUrlParserState.Fragment;
+            _opaquePath = Buf.ToString();
+            Buf.Clear();
+            Buf.EnsureCapacity(Length - Pointer);
+            State = InternalUrlParserState.Fragment;
         }
         else
         {
-            if (_pointer < _length)
+            if (Pointer < Length)
             {
                 // not url codepoint
                 if (!char.IsAsciiHexDigit(c) && c != '%')
@@ -805,8 +804,8 @@ internal class InternalUrl
                 AppendCurrentEncodedInC0(c);
             } else
             {
-                _opaquePath = _buf.ToString();
-                _buf.Clear();
+                _opaquePath = Buf.ToString();
+                Buf.Clear();
             }
         }
     }
@@ -820,24 +819,24 @@ internal class InternalUrl
         // 2. If one of the following is true:
         // state override is not given and c is U+0023 (#)
         // c is the EOF code point
-        if (c == '#' || _pointer >= _length)
+        if (c == '#' || Pointer >= Length)
         {
-            var inputToEncode = _buf.ToString();
-            _buf.Clear();
+            var inputToEncode = Buf.ToString();
+            Buf.Clear();
 
             if (IsSpecial)
-                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InSpecialQueryEncodeSet, _buf);
+                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InSpecialQueryEncodeSet, Buf);
             else
-                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InQueryEncodeSet, _buf);
+                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InQueryEncodeSet, Buf);
 
-            Query = _buf.ToString();
-            _buf.Clear();
+            Query = Buf.ToString();
+            Buf.Clear();
 
             // If c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
             if (c == '#')
             {
-                _buf.EnsureCapacity(_length - _pointer);
-                _state = InternalUrlParserState.Fragment;
+                Buf.EnsureCapacity(Length - Pointer);
+                State = InternalUrlParserState.Fragment;
             }
         }
         else
@@ -856,10 +855,10 @@ internal class InternalUrl
     // https://url.spec.whatwg.org/#fragment-state
     private void FragmentState(char c)
     {
-        if (_pointer == _length)
+        if (Pointer == Length)
         {
-            Fragment = _buf.ToString();
-            _buf.Clear();
+            Fragment = Buf.ToString();
+            Buf.Clear();
             return;
         }
 
@@ -872,9 +871,9 @@ internal class InternalUrl
 
     // helper with bound guard
     protected virtual char NextChar(int n) =>
-        _pointer + n >= _length
+        Pointer + n >= Length
             ? '\0'
-            : _input[_pointer + n];
+            : Input[Pointer + n];
 
     // https://url.spec.whatwg.org/#shorten-a-urls-path
     protected void ShortenPath()
