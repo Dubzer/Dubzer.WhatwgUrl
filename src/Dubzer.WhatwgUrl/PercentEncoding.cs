@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
@@ -9,6 +9,7 @@ namespace Dubzer.WhatwgUrl;
 internal static class PercentEncoding
 {
     // additional characters that are not in the c0 control percent encode set
+    private static readonly FrozenSet<char> QueryEncodeSet = new[]
     {
         ' ', '"', '#', '<', '>'
     }.ToFrozenSet();
@@ -48,11 +49,24 @@ internal static class PercentEncoding
     internal static void AppendEncodedInC0(Rune input, StringBuilder sb)
     {
         var c = input.ToChar();
+        if (!InC0ControlPercentEncodeSet(c))
         {
             sb.AppendRune(input);
             return;
         }
 
+        Encode(input, sb);
+    }
+
+    internal static void AppendEncodedInC0(char input, StringBuilder sb)
+    {
+        if (!InC0ControlPercentEncodeSet(input))
+        {
+            sb.Append(input);
+            return;
+        }
+
+        Encode(input, sb);
     }
 
     internal static void AppendEncoded(Rune input, StringBuilder sb, FrozenSet<char> set)
@@ -74,6 +88,49 @@ internal static class PercentEncoding
         }
     }
 
+    internal static void AppendEncoded(char input, StringBuilder sb, FrozenSet<char> set)
+    {
+        if (!InC0ControlPercentEncodeSet(input) && !set.Contains(input))
+        {
+            sb.Append(input);
+            return;
+        }
+
+        Span<byte> buf = stackalloc byte[3];
+        var written = EncodeCharToUtf8(input, buf);
+
+        for (var i = 0; i < written; i++)
+        {
+            sb.Append(CultureInfo.InvariantCulture, $"%{buf[i]:X2}");
+        }
+    }
+
+    // Inlined Rune.TryEncodeToUtf8
+    private static int EncodeCharToUtf8(char c, Span<byte> destination)
+    {
+        if (char.IsAscii(c))
+        {
+            destination[0] = (byte) c;
+
+            return 1;
+        }
+
+        if (c <= 0x7FFu)
+        {
+            // Scalar 00000yyy yyxxxxxx -> bytes [ 110yyyyy 10xxxxxx ]
+            destination[0] = (byte)((c + (0b110u << 11)) >> 6);
+            destination[1] = (byte)((c & 0x3Fu) + 0x80u);
+            return 2;
+        }
+
+        // Scalar zzzzyyyy yyxxxxxx -> bytes [ 1110zzzz 10yyyyyy 10xxxxxx ]
+        destination[0] = (byte)((c + (0b1110 << 16)) >> 12);
+        destination[1] = (byte)(((c & (0x3Fu << 6)) >> 6) + 0x80u);
+        destination[2] = (byte)((c & 0x3Fu) + 0x80u);
+        return 3;
+    }
+
+    private static void Encode(Rune r, StringBuilder sb)
     {
         Span<byte> buf = stackalloc byte[4];
 
@@ -85,18 +142,37 @@ internal static class PercentEncoding
         }
     }
 
+    private static void Encode(char c, StringBuilder sb)
+    {
+        Span<byte> buf = stackalloc byte[3];
+
+        var written = EncodeCharToUtf8(c, buf);
+
+        for (var i = 0; i < written; i++)
+        {
+            sb.Append(CultureInfo.InvariantCulture, $"%{buf[i]:X2}");
+        }
+    }
+
+    internal static void PercentEncode(Rune input, Func<char, bool> predicate, StringBuilder sb)
     {
         if (!predicate(input.ToChar()))
+        {
+            sb.AppendRune(input);
+            return;
+        }
 
         Span<byte> buf = stackalloc byte[4];
 
         var written = input.EncodeToUtf8(buf);
+        for (var i = 0; i < written; i++)
         {
             sb.Append(CultureInfo.InvariantCulture, $"%{buf[i]:X2}");
         }
     }
 
     // https://url.spec.whatwg.org/#percent-encode
+    internal static void PercentEncode(string input, Func<char, bool> predicate, StringBuilder sb)
     {
         foreach (var c in input.EnumerateRunes())
         {
@@ -137,6 +213,7 @@ internal static class PercentEncoding
 
             Span<byte> spanToDecode = [utf8[i + 1], utf8[i + 2]];
 
+            var bytePoint = byte.Parse(spanToDecode, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
             output.Add(bytePoint);
             i += 2;
@@ -144,3 +221,4 @@ internal static class PercentEncoding
 
         return output.ToArray();
     }
+}

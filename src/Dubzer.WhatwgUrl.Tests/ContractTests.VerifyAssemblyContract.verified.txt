@@ -1,4 +1,4 @@
-{
+﻿{
   DomUrl: [
     Boolean Equals(System.Object),
     Boolean TryCreate(System.String, Dubzer.WhatwgUrl.DomUrl ByRef),

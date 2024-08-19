@@ -1,4 +1,4 @@
-using Xunit.Abstractions;
+﻿using Xunit.Abstractions;
 
 namespace Dubzer.WhatwgUrl.Tests.Models;
 
@@ -6,6 +6,7 @@ public record Uts46TestCase : IXunitSerializable
 {
     public required string Input { get; init; }
     public string? Output { get; init; }
+    public string? Comment { get; init; }
 
     public void Deserialize(IXunitSerializationInfo info) { }
 
@@ -15,3 +16,4 @@ public record Uts46TestCase : IXunitSerializable
         info.AddValue(nameof(Output), Output);
         info.AddValue(nameof(Comment), Comment);
     }
+}

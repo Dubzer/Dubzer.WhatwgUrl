@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.Text;
 using Dubzer.WhatwgUrl.Uts46;
@@ -11,6 +11,12 @@ internal static class HostParser
 
     private static readonly SearchValues<char> ForbiddenHostCodePoints = SearchValues.Create([
         '\u0000', '\u0009', '\u000A', '\u000D', '\u0020', '#', '/', ':', '<', '>', '?', '@', '[', '\\', ']', '^', '|'
+    ]);
+
+    private static readonly SearchValues<char> ForbiddenDomainCodePoints = SearchValues.Create([
+        '\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07', '\x08', '\x09', '\x0A', '\x0B', '\x0C', '\x0D', '\x0E', '\x0F',
+        '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17', '\x18', '\x19', '\x1A', '\x1B', '\x1C', '\x1D', '\x1E', '\x1F',
+        '\x20', '#', '/', ':', '<', '>', '?', '@', '[', '\\', ']', '^', '|', '%', '\x7F'
     ]);
 
     // https://url.spec.whatwg.org/#ends-in-a-number-checker
@@ -29,6 +35,7 @@ internal static class HostParser
 
         var lastSpan = last.AsSpan();
 
+        if (!string.IsNullOrEmpty(last) && !lastSpan.ContainsAnyExceptInRange('0', '9'))
             return true;
 
         return Ipv4Parser.ParseNumber(last) != -1;
@@ -43,7 +50,10 @@ internal static class HostParser
 
         // TODO: If input contains a code point that is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
 
+        var sb = new StringBuilder(input.Length);
+        PercentEncoding.PercentEncode(input, PercentEncoding.InC0ControlPercentEncodeSet, sb);
 
+        return Result<string>.Success(sb.ToString());
     }
 
     // https://url.spec.whatwg.org/#host-parsing
@@ -74,7 +84,9 @@ internal static class HostParser
         if (string.IsNullOrEmpty(asciiDomain))
             return Result<string>.Failure(UrlErrorCode.DomainToAscii);
 
+        var asciiDomainSpan = asciiDomain.AsSpan();
         // 7. If asciiDomain contains a forbidden domain code point, ..., return failure.
+        if (asciiDomainSpan.ContainsAny(ForbiddenDomainCodePoints))
             return Result<string>.Failure(UrlErrorCode.DomainInvalidCodePoint);
 
         // Return IPv6 as a string here, unlike the spec,
@@ -85,3 +97,4 @@ internal static class HostParser
 
         return Result<string>.Success(asciiDomain.ToLowerInvariant());
     }
+}

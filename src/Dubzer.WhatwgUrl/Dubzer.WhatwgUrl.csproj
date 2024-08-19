@@ -1,15 +1,25 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <Title>Dubzer.WhatwgUrl</Title>
         <Description>Implements the WhatWG URL Standard in .NET</Description>
+		<PackageId>Dubzer.WhatwgUrl</PackageId>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageTags>url;uri;whatwg;web;internet;browser;parser;html</PackageTags>
+        <RepositoryType>git</RepositoryType>
         <RepositoryUrl>https://github.com/Dubzer/whaaaaaaaaaaturl</RepositoryUrl>
         <PackageReleaseNotes>https://github.com/Dubzer/whaaaaaaaaaaturl/releases</PackageReleaseNotes>
 
         <IsAotCompatible>true</IsAotCompatible>
+		<IsPackable>true</IsPackable>
+        <NoWarn>CA1032;CA1054;CA1308</NoWarn>
     </PropertyGroup>
 
+    <ItemGroup Label="References">
+        <PackageReference Include="Nunycode" Version="1.1.0" />
     </ItemGroup>
+
+	<ItemGroup Label="Resources">
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <links>
     <remarks name="Origin">
         When the scheme is <c>file</c> returns the string <c>"null"</c><br/>

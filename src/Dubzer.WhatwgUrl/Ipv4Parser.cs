@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
@@ -17,6 +17,7 @@ internal static class Ipv4Parser
         // 1. Let parts be the result of strictly splitting input on U+002E (.).
         var parts = input.Split('.').AsSpan();
         // 2. If the last item in parts is the empty string, then:
+        if (string.IsNullOrEmpty(parts[^1]))
         {
             // If parts’s size is greater than 1, then remove the last item from parts.
             if (parts.Length > 1)
@@ -91,6 +92,7 @@ internal static class Ipv4Parser
     /// <returns>-1 when invalid</returns>
     internal static long ParseNumber(string input)
     {
+        if (string.IsNullOrEmpty(input))
             return -1;
 
         var numBase = 10;   // R in spec
@@ -113,8 +115,13 @@ internal static class Ipv4Parser
         }
 
         var span = input.AsSpan();
+#pragma warning disable CS8509 // The switch expression does not handle all possible values of its input type (it is not exhaustive).
         var valid = numBase switch
+#pragma warning restore CS8509 // The switch expression does not handle all possible values of its input type (it is not exhaustive).
         {
+            8 => !span[1..].ContainsAnyExceptInRange('0', '7'),
+            10 => !span.ContainsAnyExceptInRange('0', '9'),
+            16 => !span[2..].ContainsAnyExcept(HexDigitSearchValues)
         };
 
         if (!valid)
@@ -131,3 +138,4 @@ internal static class Ipv4Parser
         // this should not throw an exception...
         return Convert.ToInt64(input, numBase);
     }
+}

@@ -1,4 +1,4 @@
-namespace Dubzer.WhatwgUrl.Uts46;
+﻿namespace Dubzer.WhatwgUrl.Uts46;
 
 internal enum IdnaStatus : byte
 {

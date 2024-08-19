@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Globalization;
 using System.Text;
 
 namespace Dubzer.WhatwgUrl;
@@ -27,6 +28,7 @@ internal static class Ipv6Parser
         if (input[pointer] == ':')
         {
             // 5.1 If remaining does not start with U+003A (:),
+            if (input.Length == 1 || input[1] != ':')
                 return Result<string>.Failure(UrlErrorCode.Ipv6InvalidCompression);
 
             // 5.2. Increase pieceIndex by 1 and then set compress to pieceIndex.
@@ -160,15 +162,18 @@ internal static class Ipv6Parser
         else if (pieceIndex != 8)
             return Result<string>.Failure(UrlErrorCode.Ipv6TooFewPieces);
 
+        return Result<string>.Success(SerializeIpv6(address));
     }
 
     // https://url.spec.whatwg.org/#concept-ipv6-serializer
+    private static string SerializeIpv6(ReadOnlySpan<ushort> address)
     {
         var sb = new StringBuilder();
         // 2. Let compress be an index
         // to the first IPv6 piece in the first longest sequences of address’s IPv6 pieces that are 0.
         // 3. If there is no sequence of address’s IPv6 pieces that are 0 that is longer than 1,
         // then set compress to null.
+        var compress = FindSequenceToCompress(address);
 
         var ignore0 = false;
         // 5. For each pieceIndex in the range 0 to 7, inclusive:
@@ -192,6 +197,7 @@ internal static class Ipv6Parser
                 continue;
             }
 
+            sb.Append(CultureInfo.InvariantCulture, $"{address[pieceIndex]:x}");
             if (pieceIndex != address.Length - 1)
                 sb.Append(':');
         }
@@ -200,6 +206,7 @@ internal static class Ipv6Parser
     }
 
     // An index to the first IPv6 piece in the first longest sequences of address’s IPv6 pieces that are 0
+    private static int? FindSequenceToCompress(ReadOnlySpan<ushort> address)
     {
         var max = 0;
         var maxIndex = -1;
@@ -239,3 +246,4 @@ internal static class Ipv6Parser
 
         return maxIndex;
     }
+}

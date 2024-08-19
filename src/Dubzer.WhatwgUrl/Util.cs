@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Text;
 
@@ -47,4 +47,6 @@ internal static class Util
     internal static byte ParseHexNumber(this char c)
     {
         Span<byte> digitString = [(byte) c];
+        return byte.Parse(digitString, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
     }
+}

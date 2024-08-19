@@ -1,10 +1,17 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
+        <NoWarn>$(NoWarn);CA1707;CA1822</NoWarn>
         <OutputType>Exe</OutputType>
     </PropertyGroup>
 
+    <ItemGroup Label="References">
+        <ProjectReference Include="..\Dubzer.WhatwgUrl\Dubzer.WhatwgUrl.csproj" />
         <PackageReference Include="BenchmarkDotNet" Version="0.13.12" />
     </ItemGroup>
 
+    <ItemGroup Label="Resources">
+        <None Update="Resources\urltestdata.json" CopyToOutputDirectory="PreserveNewest" />
+        <None Update="Resources\IdnaTestV2.json" CopyToOutputDirectory="PreserveNewest" />
         <None Update="Resources\top100.txt" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
 </Project>

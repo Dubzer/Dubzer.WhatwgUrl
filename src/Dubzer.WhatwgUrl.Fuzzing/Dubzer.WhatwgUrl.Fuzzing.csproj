@@ -1,7 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Exe</OutputType>
     </PropertyGroup>
 
+    <ItemGroup Label="References">
+        <ProjectReference Include="..\Dubzer.WhatwgUrl\Dubzer.WhatwgUrl.csproj" />
+        <PackageReference Include="SharpFuzz" Version="2.1.1" />
     </ItemGroup>
 </Project>

@@ -1,7 +1,10 @@
 using System;
+using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Dubzer.WhatwgUrl.Tests.Models;
+using Xunit;
 using Xunit.Abstractions;
 
 namespace Dubzer.WhatwgUrl.Tests;
@@ -9,6 +12,7 @@ namespace Dubzer.WhatwgUrl.Tests;
 public class DomUrlTests
 {
     private readonly ITestOutputHelper _output;
+    private readonly JsonSerializerOptions _jsonSerializerOptions = new() {WriteIndented = true};
 
     public DomUrlTests(ITestOutputHelper output)
     {
@@ -19,12 +23,17 @@ public class DomUrlTests
     [MemberData(nameof(UrlCases))]
     public void Constructor(UrlTestCase testCase)
     {
+        _output.WriteLine(JsonSerializer.Serialize(testCase, _jsonSerializerOptions));
 
+        if (testCase.Failure)
         {
+            Assert.Throws<InvalidUrlException>(() => new DomUrl(testCase.Input, testCase.Base));
             return;
         }
 
+        var domUrl = new DomUrl(testCase.Input, testCase.Base);
 
+        _output.WriteLine(JsonSerializer.Serialize(domUrl, _jsonSerializerOptions));
 
 
         Assert.Equal(testCase.Port, domUrl.Port);
@@ -55,6 +64,7 @@ public class DomUrlTests
             return;
         }
 
+        Assert.Equal(testCase.Port, domUrl!.Port);
         Assert.Equal(testCase.Username, domUrl.Username);
         Assert.Equal(testCase.Password, domUrl.Password);
         Assert.Equal(testCase.Search, domUrl.Search);
@@ -111,6 +121,10 @@ public class DomUrlTests
     public static TheoryData<UrlTestCase> UrlCases()
     {
         var file = File.ReadAllText("Resources/urltestdata.json");
+        var nodes = JsonNode.Parse(file)!.AsArray();
 
         return new TheoryData<UrlTestCase>(nodes
+            .Where(static x => x!.GetValueKind() != JsonValueKind.String)
+            .Select(static x => x.Deserialize<UrlTestCase>((JsonSerializerOptions) new() {PropertyNameCaseInsensitive = true})!));
     }
+}

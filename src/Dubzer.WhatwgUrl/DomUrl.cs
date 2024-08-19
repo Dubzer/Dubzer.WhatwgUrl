@@ -1,3 +1,6 @@
+using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 namespace Dubzer.WhatwgUrl;
 
@@ -40,6 +43,7 @@ public class DomUrl
     /// Returns the port of this URL
     /// </summary>
     /// <include file='DomUrl.Doc.xml' path='links/remarks[@name="Port"]'/>
+    public string Port => _internalUrl.Port?.ToString(CultureInfo.InvariantCulture) ?? "";
 
     /// <summary>
     /// Returns the path of this URL
@@ -90,15 +94,25 @@ public class DomUrl
     /// </exception>
     public DomUrl(string input, string? baseUrl = null)
     {
+        ArgumentNullException.ThrowIfNull(input);
+
         InternalUrl? parsedBaseUrl = null;
         if (!string.IsNullOrEmpty(baseUrl))
         {
+            parsedBaseUrl = ParseUrl(baseUrl);
         }
 
+        _internalUrl = ParseUrl(input, parsedBaseUrl);
+    }
+
+    private static InternalUrl ParseUrl(string input, InternalUrl? baseUrl = null)
+    {
         Result<InternalUrl> urlResult = InputUtils.GetParser(input).Parse(input, baseUrl);
+
         if (!urlResult)
             throw new InvalidUrlException("The URL is invalid.", urlResult.Error!.Value);
 
+        return urlResult.Value!;
     }
 
     /// <summary>
@@ -110,6 +124,10 @@ public class DomUrl
     /// </exception>
     public DomUrl(string input, DomUrl baseUrl)
     {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(baseUrl);
+
+        _internalUrl = ParseUrl(input, baseUrl._internalUrl);
     }
 
     /// <summary>Gets a serialized representation of this URL.
@@ -129,6 +147,8 @@ public class DomUrl
     /// otherwise, <see langword="false" /></returns>
     public static bool TryCreate(string input, [NotNullWhen(true)] out DomUrl? result)
     {
+        ArgumentNullException.ThrowIfNull(input);
+
         var parsed = InputUtils.GetParser(input).Parse(input);
         if (!parsed)
         {
@@ -152,6 +172,9 @@ public class DomUrl
     /// otherwise, <see langword="false" /></returns>
     public static bool TryCreate(string input, DomUrl baseUrl, [NotNullWhen(true)] out DomUrl? result)
     {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(baseUrl);
+
         var parsed = InputUtils.GetParser(input).Parse(input, baseUrl._internalUrl);
         if (!parsed)
         {
@@ -198,3 +221,4 @@ public class DomUrl
         result = new DomUrl(urlResult.Value!);
         return true;
     }
+}

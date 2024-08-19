@@ -1,10 +1,11 @@
-namespace Dubzer.WhatwgUrl;
+﻿namespace Dubzer.WhatwgUrl;
 
 /// <summary>
 /// <para><b>These codes are purely informative.</b></para>
 /// You should not rely on them in production, but paired with the examples from the
 /// <a href="https://url.spec.whatwg.org/#writing">WHATWG URL spec</a>, they might be useful for debugging.
 /// </summary>
+public enum UrlErrorCode
 {
     /// <summary>
     /// The error is out of specification or not specified in it.
@@ -56,3 +57,4 @@ internal readonly struct Result<T>
     internal static Result<T> Failure(UrlErrorCode error) => new(default, error);
 
     public static implicit operator bool(Result<T> result) => result.Value is not null;
+}
