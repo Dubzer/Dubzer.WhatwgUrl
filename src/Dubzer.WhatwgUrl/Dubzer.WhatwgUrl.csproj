@@ -6,6 +6,7 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageTags>url;uri;whatwg;web;internet;browser;parser;html</PackageTags>
+        <PackageIcon>icon.png</PackageIcon>
         <RepositoryType>git</RepositoryType>
         <RepositoryUrl>https://github.com/Dubzer/Dubzer.WhatwgUrl</RepositoryUrl>
         <PackageReleaseNotes>https://github.com/Dubzer/Dubzer.WhatwgUrl/releases</PackageReleaseNotes>
@@ -13,9 +14,11 @@
         <IsAotCompatible>true</IsAotCompatible>
 		<IsPackable>true</IsPackable>
         <NoWarn>CA1032;CA1054;CA1308</NoWarn>
+        <UserSecretsId>1847d24c-d659-45be-9d87-39064ddd1e79</UserSecretsId>
     </PropertyGroup>
 
 	<ItemGroup Label="Resources">
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
+        <None Include="..\..\docs\resources\icon.png" Pack="true" PackagePath="\" />
 	</ItemGroup>
 </Project>
