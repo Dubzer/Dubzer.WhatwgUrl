@@ -79,12 +79,15 @@ internal static class PercentEncoding
         }
 
         Span<byte> buf = stackalloc byte[4];
-
         var written = input.EncodeToUtf8(buf);
 
+        // a buffer to store hex representation of the current number
+        Span<char> hex = stackalloc char[2];
         for (var i = 0; i < written; i++)
         {
-            sb.Append(CultureInfo.InvariantCulture, $"%{buf[i]:X2}");
+            sb.Append('%');
+            Util.ByteFormatX2(buf[i], hex);
+            sb.Append(hex);
         }
     }
 
@@ -99,9 +102,13 @@ internal static class PercentEncoding
         Span<byte> buf = stackalloc byte[3];
         var written = EncodeCharToUtf8(input, buf);
 
+        // a buffer to store hex representation of the current number
+        Span<char> hex = stackalloc char[2];
         for (var i = 0; i < written; i++)
         {
-            sb.Append(CultureInfo.InvariantCulture, $"%{buf[i]:X2}");
+            sb.Append('%');
+            Util.ByteFormatX2(buf[i], hex);
+            sb.Append(hex);
         }
     }
 
