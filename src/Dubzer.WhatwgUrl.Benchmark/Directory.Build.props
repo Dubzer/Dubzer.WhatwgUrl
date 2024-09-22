@@ -1,9 +1,0 @@
-<!-- Workaround for https://github.com/dotnet/BenchmarkDotNet/issues/2466 -->
-<!-- Remove when new BenchmarkDotNet version is released -->
-<Project>
-	<Import Project="$([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', '..', '..', 'Directory.Build.props'))" />
-
-	<PropertyGroup>
-		<UseArtifactsOutput>false</UseArtifactsOutput>
-	</PropertyGroup>
-</Project>

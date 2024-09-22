@@ -6,12 +6,13 @@
 
     <ItemGroup Label="References">
         <ProjectReference Include="..\Dubzer.WhatwgUrl\Dubzer.WhatwgUrl.csproj" />
-        <PackageReference Include="BenchmarkDotNet" Version="0.13.12" />
+        <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
     </ItemGroup>
 
-    <ItemGroup Label="Resources">
-        <None Update="Resources\urltestdata.json" CopyToOutputDirectory="PreserveNewest" />
-        <None Update="Resources\IdnaTestV2.json" CopyToOutputDirectory="PreserveNewest" />
-        <None Update="Resources\top100.txt" CopyToOutputDirectory="PreserveNewest" />
+    <ItemGroup>
+        <Content Include="..\Dubzer.WhatwgUrl.Tests\Resources\*.*">
+            <Link>.\Resources\%(Filename)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
     </ItemGroup>
 </Project>
