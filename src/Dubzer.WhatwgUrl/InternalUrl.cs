@@ -26,7 +26,7 @@ internal class InternalUrl
     protected string Input = "";
     protected int Length;
 
-    protected bool IsSpecial => Schemes.Special.ContainsKey(Scheme);
+    protected bool IsSpecial;
 
     protected InternalUrl? BaseUrl;
 
@@ -202,7 +202,7 @@ internal class InternalUrl
             // currently not supporting state override
 
             // 2. Set url’s scheme to buffer.
-            Scheme = Buf.ToString();
+            UpdateScheme(Buf.ToString());
 
             // skipping state override here too
 
@@ -270,7 +270,7 @@ internal class InternalUrl
         // Otherwise, if base has an opaque path and c is U+0023 (#),
         if (BaseUrl._opaquePath != null && c == '#')
         {
-            Scheme = BaseUrl.Scheme; // set url’s scheme to base’s scheme,
+            UpdateScheme(BaseUrl.Scheme); // set url’s scheme to base’s scheme,
 
             // (since base has an opaque path, setting it instead of the _path)
             _opaquePath = BaseUrl._opaquePath; // url’s path to base’s path,
@@ -307,7 +307,7 @@ internal class InternalUrl
         Debug.WriteLineIf(BaseUrl!.Scheme != Schemes.File,
             "Failed: base’s scheme is not \"file\".");
 
-        Scheme = BaseUrl.Scheme;
+        UpdateScheme(BaseUrl.Scheme);
 
         if (c == '/')
         {
@@ -569,7 +569,7 @@ internal class InternalUrl
     // https://url.spec.whatwg.org/#file-state
     protected void FileState(char c)
     {
-        Scheme = Schemes.File;
+        UpdateScheme(Schemes.File);
         Host = "";
 
         if (c is '/' or '\\')
@@ -997,5 +997,12 @@ internal class InternalUrl
         }
 
         return sb.ToString();
+    }
+
+    // since IsSpecial is called more often than mutated, it's better to cache the value
+    private void UpdateScheme(string scheme)
+    {
+        Scheme = scheme;
+        IsSpecial = Schemes.Special.ContainsKey(Scheme);
     }
 }
