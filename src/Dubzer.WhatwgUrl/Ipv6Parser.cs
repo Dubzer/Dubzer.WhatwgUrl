@@ -169,6 +169,7 @@ internal static class Ipv6Parser
     private static string SerializeIpv6(ReadOnlySpan<ushort> address)
     {
         var sb = new StringBuilder();
+        sb.Append('[');
         // 2. Let compress be an index
         // to the first IPv6 piece in the first longest sequences of address’s IPv6 pieces that are 0.
         // 3. If there is no sequence of address’s IPv6 pieces that are 0 that is longer than 1,
@@ -202,6 +203,7 @@ internal static class Ipv6Parser
                 sb.Append(':');
         }
 
+        sb.Append(']');
         return sb.ToString();
     }
 

@@ -100,6 +100,51 @@ internal static class Idna
 
     private static string Map(string input)
     {
+        // 13 is the max mapping length. Presumably that's the worst case scenario
+        if (input.Length < Consts.MaxLengthOnStack.Char / 13)
+        {
+            Span<char> chars = stackalloc char[Consts.MaxLengthOnStack.Char];
+
+            var nextCharI = 0;
+            foreach (var rune in input.EnumerateRunes())
+            {
+                var mapping = FindMapping((uint)rune.Value);
+                switch (mapping.Status)
+                {
+                    case IdnaStatus.Deviation:
+                    case IdnaStatus.Valid:
+                    case IdnaStatus.DisallowedSTD3Valid:
+                    case IdnaStatus.Disallowed:
+                        var codepoint = rune.Value;
+
+                        // Inlined Rune.IsBmp
+                        if (codepoint <= ushort.MaxValue)
+                        {
+                            chars[nextCharI] = (char) codepoint;
+                            nextCharI++;
+                        }
+                        else
+                        {
+                            // Inlined Rune.EncodeToUtf16 => UnicodeUtility.GetUtf16SurrogatesFromSupplementaryPlaneScalar
+                            chars[nextCharI] = (char) (codepoint + 56557568U >> 10);
+                            chars[nextCharI + 1] = (char) ((codepoint & 1023) + 56320);
+                            nextCharI += 2;
+                        }
+
+                        break;
+                    case IdnaStatus.DisallowedSTD3Mapped:
+                    case IdnaStatus.Mapped:
+                        mapping.Mapping.CopyTo(chars[nextCharI..]);
+                        nextCharI += mapping.Mapping.Length;
+                        break;
+                    case IdnaStatus.Ignored:
+                        break;
+                }
+            }
+
+            return new string(chars[..nextCharI]);
+        }
+
         var result = new StringBuilder(input.Length);
         foreach (var rune in input.EnumerateRunes())
         {

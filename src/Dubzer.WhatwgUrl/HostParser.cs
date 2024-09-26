@@ -70,7 +70,7 @@ internal static class HostParser
             // only when serializing the host.
             var ipv6Result = Ipv6Parser.Parse(input[1..^1]);
             return ipv6Result
-                ? Result<string>.Success($"[{ipv6Result.Value}]")
+                ? Result<string>.Success(ipv6Result.Value!)
                 : ipv6Result;
         }
 
