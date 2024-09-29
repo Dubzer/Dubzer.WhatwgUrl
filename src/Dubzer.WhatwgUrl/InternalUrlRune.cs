@@ -1,4 +1,5 @@
-﻿using System.Collections.Frozen;
+﻿using System;
+using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -114,9 +115,76 @@ internal sealed class InternalUrlRune : InternalUrl
         }
     }
 
+    protected override void PathState(char c)
+    {
+        if (Pointer == Length || c is '/' or '?' or '#' || (c == '\\' && IsSpecial))
+        {
+            if (IsSpecial && c == '\\')
+                Debug.WriteLine("invalid-reverse-solidus");
+
+            var str = Buf.ToString();
+            if (Util.IsDoubleDot(str))
+            {
+                ShortenPath();
+
+                if (c != '/' && !(c == '\\' && IsSpecial))
+                    Path.Add("");
+            }
+            else if (Util.IsSingleDot(str) && c != '/' && !(c == '\\' && IsSpecial))
+            {
+                Path.Add("");
+            }
+            else if (!Util.IsSingleDot(str))
+            {
+                if (Scheme == Schemes.File
+                    && Path.Count == 0
+                    && str.Length == 2
+                    && char.IsAsciiLetter(str[0])
+                    && str[1] is '|')
+                {
+                    str = $"{str[0]}:";
+                }
+
+                Path.Add(str);
+            }
+
+            Buf.Clear();
+            switch (c)
+            {
+                case '?':
+                    State = InternalUrlParserState.Query;
+                    break;
+                case '#':
+                    Buf.EnsureCapacity(Length - Pointer);
+                    State = InternalUrlParserState.Fragment;
+                    break;
+            }
+        }
+        else
+        {
+            // add parse error here
+            if (c == '%' && !char.IsAsciiHexDigit(NextChar(1)) && !char.IsAsciiHexDigit(NextChar(2)))
+                Debug.WriteLine("invalid-URL-unit");
+
+            AppendCurrentEncoded(c, PercentEncoding.PathEncodeSet);
+        }
+    }
+
     // helper with bound guard
     protected override char NextChar(int n) =>
         Pointer + n >= Length
             ? '\0'
             : _inputRunes[Pointer + n].ToChar();
+
+    protected override int SegmentLength(ReadOnlySpan<char> input)
+    {
+        var length = 0;
+        var enumerator = input.EnumerateRunes();
+        while (enumerator.MoveNext())
+        {
+            length++;
+        }
+
+        return length;
+    }
 }

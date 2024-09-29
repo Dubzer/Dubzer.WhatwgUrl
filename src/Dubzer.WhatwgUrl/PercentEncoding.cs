@@ -2,6 +2,11 @@
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
 
 namespace Dubzer.WhatwgUrl;
@@ -69,6 +74,83 @@ internal static class PercentEncoding
         Encode(input, sb);
     }
 
+    public static void AppendEncodedPath(ReadOnlySpan<char> input, StringBuilder sb)
+    {
+        var (iterations, rest) = Math.DivRem(input.Length, Vector128<ushort>.Count);
+        for (var i = 0; i < iterations; i++)
+        {
+            var slice = input.Slice(i * Vector128<ushort>.Count, Vector128<ushort>.Count);
+            var vecX = Vector128.Create(MemoryMarshal.Cast<char, ushort>(slice));
+            var xFromY = Vector128<ushort>.Zero;
+
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'"'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'#'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'<'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'>'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'?'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'`'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'{'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'}'));
+
+            xFromY |= Vector128.LessThanOrEqual(vecX, Vector128.Create((ushort)0x20));
+            xFromY |= Vector128.GreaterThan(vecX, Vector128.Create((ushort)0x7E));
+
+            // the result is represented by the 8 most significant bits
+            // where bit is set when the character has passed any checks
+            var result = xFromY.ExtractMostSignificantBits();
+
+            // the mask will be 0x0000_0000
+            // which means no characters have passed the checks,
+            // and they don't need to be encoded
+            if (result == 0)
+            {
+                sb.Append(slice);
+                continue;
+            }
+
+            for (var bit = 0; bit < Vector128<ushort>.Count; bit++)
+            {
+                var c = slice[bit];
+                if ((result & (1 << bit)) == 0)
+                {
+                    sb.Append(c);
+                }
+                else
+                {
+                    AppendPercentChar(c, sb);
+                }
+            }
+        }
+
+        foreach (var c in input[^rest..])
+        {
+            if (!(c <= 0x1F || c > 0x7E) && !PathEncodeSet.Contains(c))
+            {
+                sb.Append(c);
+            }
+            else
+            {
+                AppendPercentChar(c, sb);
+            }
+        }
+    }
+
+    private static void AppendPercentChar(char c, StringBuilder sb)
+    {
+        Span<byte> buf = stackalloc byte[3];
+        var written = EncodeCharToUtf8(c, buf);
+
+        // a buffer to store hex representation of the current number
+        Span<char> hex = stackalloc char[2];
+        for (var w = 0; w < written; w++)
+        {
+            sb.Append('%');
+            Util.ByteFormatX2(buf[w], hex);
+            sb.Append(hex);
+        }
+    }
+
+
     internal static void AppendEncoded(Rune input, StringBuilder sb, FrozenSet<char> set)
     {
         var c = input.ToChar();
@@ -99,17 +181,7 @@ internal static class PercentEncoding
             return;
         }
 
-        Span<byte> buf = stackalloc byte[3];
-        var written = EncodeCharToUtf8(input, buf);
-
-        // a buffer to store hex representation of the current number
-        Span<char> hex = stackalloc char[2];
-        for (var i = 0; i < written; i++)
-        {
-            sb.Append('%');
-            Util.ByteFormatX2(buf[i], hex);
-            sb.Append(hex);
-        }
+        AppendPercentChar(input, sb);
     }
 
     // Inlined Rune.TryEncodeToUtf8
