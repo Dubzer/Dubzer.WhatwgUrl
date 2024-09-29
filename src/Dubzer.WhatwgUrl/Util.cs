@@ -9,16 +9,18 @@ internal static class Util
 {
     // https://url.spec.whatwg.org/#single-dot-path-segment
     internal static bool IsSingleDot(ReadOnlySpan<char> input) =>
-        input is "." || input.Equals("%2e", StringComparison.OrdinalIgnoreCase);
+        input.Length <= 3
+        && (input is "." || input.Equals("%2e", StringComparison.OrdinalIgnoreCase));
 
     // https://url.spec.whatwg.org/#double-dot-path-segment
     // this implementation was benched against a FrozenSet<string>.
     // it is faster on such a small amount of strings.
     internal static bool IsDoubleDot(ReadOnlySpan<char> input) =>
-        input is ".."
-        || input.Equals(".%2e", StringComparison.OrdinalIgnoreCase)
-        || input.Equals("%2e.", StringComparison.OrdinalIgnoreCase)
-        || input.Equals("%2e%2e", StringComparison.OrdinalIgnoreCase);
+        input.Length <= 6
+        && (input is ".."
+            || input.Equals(".%2e", StringComparison.OrdinalIgnoreCase)
+            || input.Equals("%2e.", StringComparison.OrdinalIgnoreCase)
+            || input.Equals("%2e%2e", StringComparison.OrdinalIgnoreCase));
 
     internal static bool IsAsciiHexDigit(this Rune rune) =>
         rune.TryChar(out var c) && char.IsAsciiHexDigit(c);
