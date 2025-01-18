@@ -231,62 +231,55 @@ internal static class Idna
         return true;
     }
 
-    // Direct port of https://github.com/ada-url/idna/blob/fff988508f659ef5c6494572ebea3d5db2466ed0/src/validity.cpp#L1192
     private static bool ValidJoiners(ReadOnlySpan<Rune> label)
     {
-        for (var i = 0; i < label.Length; i++)
+        const int ZWNJ = 0x200C;
+        const int ZWJ = 0x200D;
+
+        var codepoints = MemoryMarshal.Cast<Rune, int>(label);
+        var index = codepoints.IndexOfAny(ZWNJ, ZWJ);;
+
+        if (index == -1)
+            return true;
+
+        switch (codepoints[index])
         {
-            int c = label[i].Value;
-            if (c == 0x200c)
-            {
-                if (i > 0)
-                {
-                    if (UnicodeTables.ViramaSet.Contains(label[i - 1].Value))
-                    {
-                        return true;
-                    }
-                }
-                if (i == 0 || i + 1 >= label.Length)
-                {
+            case ZWNJ:
+                if (index > 0 && UnicodeTables.ViramaSet.Contains(codepoints[index - 1]))
+                    return true;
+
+                if (index == 0 || index + 1 >= label.Length)
                     return false;
-                }
 
-                // we go backward looking for L or D
-                Func<int, bool> is_l_or_d = static code =>
-                    UnicodeTables.LChar == code || UnicodeTables.DSet.Contains(code);
-                Func<int, bool> is_r_or_d = static code =>
-                    UnicodeTables.RSet.Contains(code) || UnicodeTables.DSet.Contains(code);
-
-                return RuneAny(label[..i], is_l_or_d) && RuneAny(label[(i + 1)..], is_r_or_d);
-            }
-
-            if (c == 0x200d)
-            {
-                if (i > 0)
+                var found = false;
+                foreach (var c in label[..index])
                 {
-                    if (UnicodeTables.ViramaSet.Contains(label[i - 1].Value))
+                    if (UnicodeTables.LChar == c.Value || UnicodeTables.DSet.Contains(c.Value))
                     {
-                        return true;
+                        found = true;
+                        break;
                     }
                 }
-                return false;
-            }
+
+                if (!found)
+                    return false;
+
+                found = false;
+                foreach (var c in label[(index + 1)..])
+                {
+                    if (UnicodeTables.RSet.Contains(c.Value) || UnicodeTables.DSet.Contains(c.Value))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                return found;
+            case ZWJ:
+                return index > 0 && UnicodeTables.ViramaSet.Contains(codepoints[index - 1]);
         }
 
         return true;
-    }
-
-    private static bool RuneAny(ReadOnlySpan<Rune> runes, Func<int, bool> predicate)
-    {
-        foreach (var rune in runes)
-        {
-            if (predicate(rune.Value))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static bool ValidBidi(ReadOnlySpan<Rune> label)
