@@ -5,11 +5,11 @@ using System.Linq;
 namespace Dubzer.WhatwgUrl.Codegen;
 
 /// <summary>
-/// Parses unicode tables
+/// Reads unicode tables
 /// </summary>
-internal static class Parser
+internal static class Reader
 {
-    internal static IEnumerable<string[]> Parse(IEnumerable<string> lines)
+    internal static IEnumerable<string[]> Read(IEnumerable<string> lines)
     {
         foreach (var line in lines)
         {
