@@ -2,6 +2,7 @@
     <PropertyGroup>
         <NoWarn>$(NoWarn);CA1707;CA1822</NoWarn>
         <OutputType>Exe</OutputType>
+        <TargetFramework>net9.0</TargetFramework>
     </PropertyGroup>
 
     <ItemGroup Label="References">

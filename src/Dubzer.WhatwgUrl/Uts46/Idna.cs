@@ -77,25 +77,50 @@ internal static class Idna
             $"xn--{encodedLabel}";
     }
 
-    private static MappingTableRow FindMapping(uint val)
+    public static IdnaStatusRow FindMapping(uint codepoint)
     {
-        if (IdnaMappingTable.Dictionary.TryGetValue(val, out var map))
+        // fast path for the most common case in ASCII range
+        if (codepoint is <= 0x0040 or >= 0x005B and <= 0x007F)
+            return new(IdnaStatus.Valid, ReadOnlySpan<char>.Empty);
+
+        var flaggedMainRef = IdnaMappingTable.MainRefs[(int)codepoint >> 6];
+
+        // reference without a flag
+        var mainRef = flaggedMainRef & ~IdnaMappingTable.RefBoolPackFlag;
+
+        // this is an offset within codepoints block
+        var offsetWithinBlock = codepoint & 0b111111;
+
+        // if the most significant bit is set, then it's a bool pack
+        if (mainRef != flaggedMainRef)
         {
-            return map;
+            var pack = IdnaMappingTable.BoolPacks[(int) mainRef];
+
+            return ((pack >> (int) offsetWithinBlock) & 1ul) == 1
+                ? new(IdnaStatus.Valid, ReadOnlySpan<char>.Empty)
+                : new(IdnaStatus.Disallowed, ReadOnlySpan<char>.Empty);
         }
 
-        var index = IdnaMappingTable.Rows.AsSpan().BinarySearch(val);
-        if (index < 0)
-        {
-            index = ~index;
-        }
+        // in this case, cleanIdnaRef is a reference to the start of the block we need, within contiguous array.
+        // so by adding the offset, we can get an index of the codepoint status in the array
+        var index = mainRef + offsetWithinBlock;
+        var result = IdnaMappingTable.RefBlocks[(int) index];
 
-        if (index < IdnaMappingTable.Rows.Length)
+        switch (result)
         {
-            return IdnaMappingTable.Dictionary[IdnaMappingTable.Rows[index]];
-        }
+            case IdnaMappingTable.RefBlockValid:
+                return new(IdnaStatus.Valid, ReadOnlySpan<char>.Empty);
+            case IdnaMappingTable.RefBlockInvalid:
+                return new(IdnaStatus.Disallowed, ReadOnlySpan<char>.Empty);
+            case IdnaMappingTable.RefBlockIgnored:
+                return new(IdnaStatus.Ignored, ReadOnlySpan<char>.Empty);
+            default:
+                var mappingLength = (int) result >> 16;
+                var mappingOffset = (int) result & 0xFFFF;
 
-        return default;
+                var span = IdnaMappingTable.Mappings.AsSpan()[mappingOffset..(mappingOffset + mappingLength)];
+                return new (IdnaStatus.Mapped, span);
+        }
     }
 
     private static string Map(string input)
@@ -111,9 +136,7 @@ internal static class Idna
                 var mapping = FindMapping((uint)rune.Value);
                 switch (mapping.Status)
                 {
-                    case IdnaStatus.Deviation:
                     case IdnaStatus.Valid:
-                    case IdnaStatus.DisallowedSTD3Valid:
                     case IdnaStatus.Disallowed:
                         var codepoint = rune.Value;
 
@@ -132,7 +155,6 @@ internal static class Idna
                         }
 
                         break;
-                    case IdnaStatus.DisallowedSTD3Mapped:
                     case IdnaStatus.Mapped:
                         mapping.Mapping.CopyTo(chars[nextCharI..]);
                         nextCharI += mapping.Mapping.Length;
@@ -151,13 +173,10 @@ internal static class Idna
             var mapping = FindMapping((uint)rune.Value);
             switch (mapping.Status)
             {
-                case IdnaStatus.Deviation:
                 case IdnaStatus.Valid:
-                case IdnaStatus.DisallowedSTD3Valid:
                 case IdnaStatus.Disallowed:
                     result.AppendRune(rune);
                     break;
-                case IdnaStatus.DisallowedSTD3Mapped:
                 case IdnaStatus.Mapped:
                     result.Append(mapping.Mapping);
                     break;
@@ -209,7 +228,7 @@ internal static class Idna
         foreach (var codepoint in runes)
         {
             var status = FindMapping((uint)codepoint.Value).Status;
-            if (status is not (IdnaStatus.Valid or IdnaStatus.Deviation or IdnaStatus.DisallowedSTD3Valid))
+            if (status is not IdnaStatus.Valid)
             {
                 return false;
             }
