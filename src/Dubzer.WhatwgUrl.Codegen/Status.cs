@@ -6,7 +6,5 @@ public enum IdnaStatus
     Ignored,
     Mapped,
     Deviation,
-    Disallowed,
-    DisallowedSTD3Valid,
-    DisallowedSTD3Mapped
+    Disallowed
 }
