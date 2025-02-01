@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Dubzer.WhatwgUrl.Uts46;
 
@@ -20,25 +21,28 @@ internal static class HostParser
     ]);
 
     // https://url.spec.whatwg.org/#ends-in-a-number-checker
-    private static bool EndsInANumber(string input)
+    private static bool EndsInANumber(ReadOnlySpan<char> input)
     {
-        var parts = input.Split('.');
+        // 1. Let parts be the result of strictly splitting input on U+002E (.).
+        var lastPartOffset = input.LastIndexOf('.');
 
-        var last = parts[^1];
-        if (string.IsNullOrEmpty(last))
+        // 2. If the last item in parts is the empty string, then:
+        if (lastPartOffset == input.Length - 1)
         {
-            if (parts.Length == 1)
-                return false;
+            input = input[..^1];
 
-            last = parts[^2];
+            // 1. If parts’s size is 1, then return false.
+            lastPartOffset = input.LastIndexOf('.');
+            if (lastPartOffset == -1 && lastPartOffset == input.Length - 1)
+                return false;
         }
 
-        var lastSpan = last.AsSpan();
+        input = input[(lastPartOffset + 1)..];
 
-        if (!string.IsNullOrEmpty(last) && !lastSpan.ContainsAnyExceptInRange('0', '9'))
+        if (input.Length > 0 && !input.ContainsAnyExceptInRange('0', '9'))
             return true;
 
-        return Ipv4Parser.ParseNumber(last) != -1;
+        return Ipv4Parser.ParseNumber(input) != -1;
     }
 
     // https://url.spec.whatwg.org/#concept-opaque-host-parser
@@ -55,6 +59,9 @@ internal static class HostParser
 
         return Result<string>.Success(sb.ToString());
     }
+
+    // characters that are not allowed for executing fast path
+    private static readonly SearchValues<char> FastPathInvalid = SearchValues.Create("-%");
 
     // https://url.spec.whatwg.org/#host-parsing
     public static Result<string> Parse(string input, bool isOpaque)
@@ -77,14 +84,55 @@ internal static class HostParser
         if (isOpaque)
             return ParseOpaqueHost(input);
 
-        // 4.Let domain be the result of running UTF-8 decode without BOM on the percent-decoding of input.
-        var domain = Utf8WithoutBom.GetString(PercentEncoding.PercentDecode(input));
+        var span = input.AsSpan();
 
-        var asciiDomain = Idna.ToAscii(domain);
-        if (string.IsNullOrEmpty(asciiDomain))
-            return Result<string>.Failure(UrlErrorCode.DomainToAscii);
+        var asciiFastPath = false;
 
-        var asciiDomainSpan = asciiDomain.AsSpan();
+        // additional validation for fast path
+        // TODO: SearchValues<ReadOnlySpan<char>> can be used when .NET 9 is targeted
+        if (input.Length < Consts.MaxLengthOnStack.Char
+            && RuntimeHelpers.TryEnsureSufficientExecutionStack()
+            && Ascii.IsValid(input))
+        {
+            var currentIndex = 0;
+            while (true)
+            {
+                var index = span[currentIndex..].IndexOfAny(FastPathInvalid);
+                if (index == -1)
+                {
+                    asciiFastPath = true;
+                    break;
+                }
+
+                if (span[index] == '%' ||
+                    // span[index..] is ['-', '-', ..]
+                    span[index] == '-' && span.Length > index + 1 && span[index + 1] == '-')
+                    break;
+
+                currentIndex += index + 1;
+            }
+        }
+
+        scoped ReadOnlySpan<char> asciiDomainSpan;
+        if (asciiFastPath)
+        {
+            Span<char> buf = stackalloc char[input.Length];
+            span.ToLowerInvariant(buf);
+
+            asciiDomainSpan = buf;
+        }
+        else
+        {
+            // 4.Let domain be the result of running UTF-8 decode without BOM on the percent-decoding of input.
+            var domain = Utf8WithoutBom.GetString(PercentEncoding.PercentDecode(input));
+
+            var asciiDomain = Idna.ToAscii(domain);
+            if (string.IsNullOrEmpty(asciiDomain))
+                return Result<string>.Failure(UrlErrorCode.DomainToAscii);
+
+            asciiDomainSpan = asciiDomain.AsSpan();
+        }
+
         // 7. If asciiDomain contains a forbidden domain code point, ..., return failure.
         if (asciiDomainSpan.ContainsAny(ForbiddenDomainCodePoints))
             return Result<string>.Failure(UrlErrorCode.DomainInvalidCodePoint);
@@ -92,9 +140,9 @@ internal static class HostParser
         // Return IPv6 as a string here, unlike the spec,
         // which states to serialize a number to a string
         // only when serializing the host.
-        if (EndsInANumber(asciiDomain))
-            return Ipv4Parser.Parse(asciiDomain);
+        if (EndsInANumber(asciiDomainSpan))
+            return Ipv4Parser.Parse(asciiDomainSpan.ToString());
 
-        return Result<string>.Success(asciiDomain.ToLowerInvariant());
+        return Result<string>.Success(asciiDomainSpan.ToString());
     }
 }

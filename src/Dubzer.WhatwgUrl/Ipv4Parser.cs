@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
+using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
@@ -90,9 +91,9 @@ internal static class Ipv4Parser
     }
 
     /// <returns>-1 when invalid</returns>
-    internal static long ParseNumber(string input)
+    internal static long ParseNumber(ReadOnlySpan<char> input)
     {
-        if (string.IsNullOrEmpty(input))
+        if (input.Length == 0)
             return -1;
 
         var numBase = 10;   // R in spec
@@ -114,14 +115,13 @@ internal static class Ipv4Parser
             }
         }
 
-        var span = input.AsSpan();
 #pragma warning disable CS8509 // The switch expression does not handle all possible values of its input type (it is not exhaustive).
         var valid = numBase switch
 #pragma warning restore CS8509 // The switch expression does not handle all possible values of its input type (it is not exhaustive).
         {
-            8 => !span[1..].ContainsAnyExceptInRange('0', '7'),
-            10 => !span.ContainsAnyExceptInRange('0', '9'),
-            16 => !span[2..].ContainsAnyExcept(HexDigitSearchValues)
+            8 => !input[1..].ContainsAnyExceptInRange('0', '7'),
+            10 => !input.ContainsAnyExceptInRange('0', '9'),
+            16 => !input[2..].ContainsAnyExcept(HexDigitSearchValues)
         };
 
         if (!valid)
@@ -135,7 +135,6 @@ internal static class Ipv4Parser
             // MaxValue so IP would not be valid on the check later
             return long.MaxValue;
 
-        // this should not throw an exception...
-        return Convert.ToInt64(input, numBase);
+        return ParseNumbers.StringToLong(input, numBase, ParseNumbers.IsTight);
     }
 }
