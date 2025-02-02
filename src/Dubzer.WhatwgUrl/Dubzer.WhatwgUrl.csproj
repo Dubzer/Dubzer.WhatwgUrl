@@ -11,9 +11,10 @@
         <RepositoryUrl>https://github.com/Dubzer/Dubzer.WhatwgUrl</RepositoryUrl>
         <PackageReleaseNotes>https://github.com/Dubzer/Dubzer.WhatwgUrl/releases</PackageReleaseNotes>
 
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <IsAotCompatible>true</IsAotCompatible>
 		<IsPackable>true</IsPackable>
-        <NoWarn>CA1032;CA1054;CA1308</NoWarn>
+        <NoWarn>CA1032;CA1054;CA1308;1591</NoWarn>
         <UserSecretsId>1847d24c-d659-45be-9d87-39064ddd1e79</UserSecretsId>
     </PropertyGroup>
 
