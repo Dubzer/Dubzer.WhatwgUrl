@@ -734,6 +734,8 @@ internal class InternalUrl
         }
     }
 
+    private static readonly SearchValues<char> FastPathDisallowed = SearchValues.Create(".%\\");
+
     // https://url.spec.whatwg.org/#path-state
     protected virtual void PathState(char c)
     {
@@ -747,6 +749,46 @@ internal class InternalUrl
         }
 
         var inputRemainder = Input.AsSpan()[Pointer..];
+        if (IsSpecial && Scheme != Schemes.File && !inputRemainder.ContainsAny(FastPathDisallowed))
+        {
+            var lastInPath = inputRemainder.IndexOfAny('?', '#');
+
+            var endsWithChar = '\u0000';
+            ReadOnlySpan<char> path;
+            if (lastInPath == -1)
+            {
+                if (inputRemainder.Length == 0)
+                    return;
+
+                lastInPath = inputRemainder.Length;
+                path = inputRemainder;
+            }
+            else
+            {
+                path = inputRemainder[..lastInPath];
+                endsWithChar = inputRemainder[lastInPath];
+            }
+
+            Pointer += lastInPath;
+
+            PercentEncoding.AppendEncodedPath(path, Buf);
+            Path.Add(Buf.ToString());
+            Buf.Clear();
+
+            switch (endsWithChar)
+            {
+                case '?':
+                    State = InternalUrlParserState.Query;
+                    break;
+                case '#':
+                    Buf.EnsureCapacity(Length - Pointer);
+                    State = InternalUrlParserState.Fragment;
+                    break;
+            }
+
+            return;
+        }
+
         var segmentEndsAt = inputRemainder.IndexOfAny(IsSpecial ? _specialPathSegmentEndSet : _pathSegmentEndSet);
 
         if (segmentEndsAt == -1)
@@ -796,6 +838,7 @@ internal class InternalUrl
 
         Pointer += SegmentLength(segment);
 
+        Debug.WriteLine("Processed path segment: " + segment.ToString());
         Buf.Clear();
 
         switch (endsWith)
@@ -918,7 +961,18 @@ internal class InternalUrl
 
         // Remove path’s last item, if any.
         if (Path.Count > 0)
-            Path.RemoveAt(Path.Count - 1);
+        {
+            var lastPart = Path[^1];
+            var slashInPart = lastPart.LastIndexOf('/');
+            if (slashInPart != -1)
+            {
+                Path[^1] = lastPart[..slashInPart];
+            }
+            else
+            {
+                Path.RemoveAt(Path.Count - 1);
+            }
+        }
     }
 
     // https://url.spec.whatwg.org/#normalized-windows-drive-letter
