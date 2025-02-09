@@ -7,7 +7,7 @@ namespace Dubzer.WhatwgUrl;
 /// <summary>
 /// This class represents a parsed URL object
 /// </summary>
-public class DomUrl
+public class DomUrl : IEquatable<DomUrl>
 {
     /// <summary>
     /// Returns the origin of this URL
@@ -221,4 +221,50 @@ public class DomUrl
         result = new DomUrl(urlResult.Value!);
         return true;
     }
+
+    public bool Equals([NotNullWhen(true)] DomUrl? other)
+    {
+        if (other is null)
+            return false;
+
+        return Href == other.Href;
+    }
+
+    public override bool Equals([NotNullWhen(true)] object? obj)
+    {
+        if (obj is null)
+            return false;
+
+        if (ReferenceEquals(this, obj))
+            return true;
+
+        if (obj.GetType() != GetType())
+            return false;
+
+        return Equals((DomUrl)obj);
+    }
+
+    public static bool operator ==(DomUrl? obj1, DomUrl? obj2)
+    {
+        if (ReferenceEquals(obj1, obj2))
+            return true;
+
+        if (obj1 is null || obj2 is null)
+            return false;
+
+        return obj1.Equals(obj2);
+    }
+
+    public static bool operator !=(DomUrl? obj1, DomUrl? obj2)
+    {
+        if (ReferenceEquals(obj1, obj2))
+            return false;
+
+        if (obj1 is null || obj2 is null)
+            return true;
+
+        return !obj1.Equals(obj2);
+    }
+
+    public override int GetHashCode() => Href.GetHashCode(StringComparison.Ordinal);
 }

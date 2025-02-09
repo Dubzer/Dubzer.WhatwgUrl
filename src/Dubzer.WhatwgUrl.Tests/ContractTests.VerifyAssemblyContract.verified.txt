@@ -1,6 +1,9 @@
 ﻿{
   DomUrl: [
+    Boolean Equals(Dubzer.WhatwgUrl.DomUrl),
     Boolean Equals(System.Object),
+    Boolean op_Equality(Dubzer.WhatwgUrl.DomUrl, Dubzer.WhatwgUrl.DomUrl),
+    Boolean op_Inequality(Dubzer.WhatwgUrl.DomUrl, Dubzer.WhatwgUrl.DomUrl),
     Boolean TryCreate(System.String, Dubzer.WhatwgUrl.DomUrl ByRef),
     Boolean TryCreate(System.String, Dubzer.WhatwgUrl.DomUrl, Dubzer.WhatwgUrl.DomUrl ByRef),
     Boolean TryCreate(System.String, System.String, Dubzer.WhatwgUrl.DomUrl ByRef),

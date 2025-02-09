@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -115,6 +116,32 @@ public class DomUrlTests
         DomUrl.TryCreate(url, baseUrl, out var withStringUrlBase);
 
         Assert.Equivalent(withStringUrlBase, withDomUrlBase, true);
+    }
+
+    [Theory]
+    [InlineData("https://google.com", "https://google.com", true)]
+    [InlineData("https://google.com/foo", @"https:\\google.com\foo", true)]
+    [InlineData("https://google.com", "https://google.com:443", true)]
+    [InlineData("https://google.com", "https://bing.com", false)]
+    [InlineData("https://google.com/foo?bar=baz", "https://google.com/foo", false)]
+    public void DomUrlEquality(string url1, string url2, bool isEqual)
+    {
+        var domUrl1 = new DomUrl(url1);
+        var domUrl2 = new DomUrl(url2);
+        
+        Assert.Equal(isEqual, domUrl1 == domUrl2);
+        Assert.Equal(!isEqual, domUrl1 != domUrl2);
+        Assert.Equal(isEqual, domUrl1.GetHashCode() == domUrl2.GetHashCode());
+
+        // bool Equals(object? obj)
+        Assert.Equal(isEqual, domUrl1.Equals((object) domUrl2));
+
+        // bool Equals(DomUrl? other)
+        Assert.Equal(isEqual, domUrl1.Equals(domUrl2));
+        ReadOnlySpan<DomUrl> span1 = [domUrl1];
+        ReadOnlySpan<DomUrl> span2 = [domUrl2];
+        Assert.Equal(isEqual, span1.SequenceEqual(span2));
+
     }
 
     public static TheoryData<UrlTestCase> UrlCases()

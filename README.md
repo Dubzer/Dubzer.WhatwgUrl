@@ -139,4 +139,4 @@ help in improving performance
 - [Ada](https://github.com/ada-url) - for the existing implementation.
   I wouldn't be able to decipher all these confusing specs without seeing the code!
 - [wpt.fyi](https://wpt.fyi) - for the tests
-- [Web++] - for the IDNA lookup implementation reference
+- [Web++](https://github.com/the-moisrex/webpp) - for the IDNA lookup implementation reference
