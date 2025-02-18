@@ -11,6 +11,7 @@
         <RepositoryUrl>https://github.com/Dubzer/Dubzer.WhatwgUrl</RepositoryUrl>
         <PackageReleaseNotes>https://github.com/Dubzer/Dubzer.WhatwgUrl/releases</PackageReleaseNotes>
 
+        <TargetFramework>net8.0</TargetFramework>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <IsAotCompatible>true</IsAotCompatible>
 		<IsPackable>true</IsPackable>

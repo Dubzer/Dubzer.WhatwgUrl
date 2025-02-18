@@ -3,11 +3,13 @@
 
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Dubzer.WhatwgUrl.BclInternal;
 
 /// <summary>Methods for parsing numbers and strings.</summary>
+[ExcludeFromCodeCoverage]
 internal static class ParseNumbers
 {
     private const int TreatAsUnsigned = 0x0200;

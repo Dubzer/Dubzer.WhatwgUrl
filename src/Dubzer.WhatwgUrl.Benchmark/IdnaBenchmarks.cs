@@ -1,19 +1,20 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BenchmarkDotNet.Attributes;
+using Dubzer.WhatwgUrl.Tests.Models;
 using Dubzer.WhatwgUrl.Uts46;
-// ReSharper disable UnusedAutoPropertyAccessor.Global
 
 namespace Dubzer.WhatwgUrl.Benchmark;
 
 [MemoryDiagnoser]
-public class IdnaBenchmarks
+internal class IdnaBenchmarks
 {
 	private string[] _data = null!;
 
-	public enum TestSet
+	internal enum TestSet
 	{
 		FullIdnaTestV2,
 		ValidOnlyIdnaTestV2,
@@ -21,6 +22,7 @@ public class IdnaBenchmarks
 	}
 
 	[Params(TestSet.FullIdnaTestV2, TestSet.ValidOnlyIdnaTestV2, TestSet.AdaBenchmark)]
+	[SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
 	public TestSet DataSet { get; set; }
 
 	[GlobalSetup]
@@ -68,10 +70,4 @@ public class IdnaBenchmarks
 			_ = Idna.ToAscii(input);
 		}
 	}
-}
-
-public record Uts46TestCase
-{
-	public required string Input { get; init; }
-	public string? Output { get; init; }
 }

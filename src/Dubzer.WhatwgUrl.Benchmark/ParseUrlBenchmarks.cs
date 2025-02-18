@@ -4,13 +4,14 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BenchmarkDotNet.Attributes;
+using Dubzer.WhatwgUrl.Tests.Models;
 
 namespace Dubzer.WhatwgUrl.Benchmark;
 
 [MemoryDiagnoser]
-public class ParseUrlBenchmarks
+internal class ParseUrlBenchmarks
 {
-	public enum TestSet
+	internal enum TestSet
 	{
 		UrlTestData,
 		UrlTestDataValidOnly,

@@ -20,7 +20,7 @@ sb.Append(
         /// <summary>
         /// This flag is used in <see cref="MainRefs"/> table
         /// </summary>
-        internal const uint RefBoolPackFlag = 0b1000000000000000;
+        internal const uint RefBoolPackFlag = 1u << 15;
         
     """);
 
@@ -80,9 +80,8 @@ sb.Append(
     """);
 
 var inRow = 0;
-for (var i = 0; i < arrays.Mappings.Length; i++)
+foreach (var mapping in arrays.Mappings)
 {
-    var mapping = arrays.Mappings[i];
     // TODO: i'm not sure why, but when encoding it as a string something breaks
     // compiler bug lol?
     if (inRow >= 18)// && !char.IsLowSurrogate(mapping))
@@ -93,7 +92,7 @@ for (var i = 0; i < arrays.Mappings.Length; i++)
         inRow = 0;
     }
 
-    sb.Append($"\\u{(ushort)mapping:X4}");
+    sb.Append(CultureInfo.InvariantCulture, $"\\u{(ushort)mapping:X4}");
     inRow++;
 }
 

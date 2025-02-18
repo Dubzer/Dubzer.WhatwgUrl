@@ -1,6 +1,6 @@
 ﻿namespace Dubzer.WhatwgUrl.Codegen;
 
-public enum IdnaStatus
+internal enum IdnaStatus
 {
     Valid,
     Ignored,

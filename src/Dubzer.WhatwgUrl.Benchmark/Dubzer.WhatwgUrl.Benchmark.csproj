@@ -1,11 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <NoWarn>$(NoWarn);CA1707;CA1822</NoWarn>
+        <NoWarn>$(NoWarn);CA1707;CA1822;CA1852;CA1812</NoWarn>
         <OutputType>Exe</OutputType>
         <TargetFramework>net9.0</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup Label="References">
+        <ProjectReference Include="..\Dubzer.WhatwgUrl.Tests\Dubzer.WhatwgUrl.Tests.csproj" />
         <ProjectReference Include="..\Dubzer.WhatwgUrl\Dubzer.WhatwgUrl.csproj" />
         <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
     </ItemGroup>

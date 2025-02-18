@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<NoWarn>$(NoWarn);CA1062;CA1054</NoWarn>
+		<NoWarn>$(NoWarn);CA1062;CA1054;CA1515</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup Label="References">

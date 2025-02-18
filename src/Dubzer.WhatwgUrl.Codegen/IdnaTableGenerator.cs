@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
 
 namespace Dubzer.WhatwgUrl.Codegen;
 
@@ -10,10 +9,7 @@ internal readonly record struct GenerationResult(uint[] MainRefs, ulong[] BoolPa
 
 internal static class IdnaTableGenerator
 {
-    /// <summary>
-    /// This flag is used in the <see cref="MainRefs"/> table.
-    /// </summary>
-    private const uint MainRefBoolPackFlag = 0b1000000000000000;
+    private const uint RefBoolPackFlag = 1u << 15;
 
     private const int BatchSize = 64;
 
@@ -56,7 +52,7 @@ internal static class IdnaTableGenerator
                     boolPacks[pack] = packIndex;
                 }
 
-                mainRefs[currentBlock] = MainRefBoolPackFlag | (uint)packIndex;
+                mainRefs[currentBlock] = RefBoolPackFlag | (uint)packIndex;
                 continue;
             }
 
@@ -65,20 +61,19 @@ internal static class IdnaTableGenerator
             const uint ignored = 0x80000004;
 
             var refBlock = new List<uint>();
-            foreach (var row in block)
+            foreach (var (idnaStatus, mapping) in block)
             {
                 uint value;
-                var mapping = row.Mapping;
 
-                if (string.IsNullOrEmpty(mapping) || row.Status is IdnaStatus.Deviation or IdnaStatus.Ignored)
+                if (string.IsNullOrEmpty(mapping) || idnaStatus is IdnaStatus.Deviation)
                 {
-                    value = row.Status switch
+                    value = idnaStatus switch
                     {
                         IdnaStatus.Valid or IdnaStatus.Deviation => valid,
                         IdnaStatus.Ignored => ignored,
                         IdnaStatus.Mapped => ignored,
                         IdnaStatus.Disallowed => disallowed,
-                        _ => throw new ArgumentOutOfRangeException()
+                        _ => throw new ArgumentOutOfRangeException(nameof(rows))
                     };
                 }
                 else

@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace Dubzer.WhatwgUrl.Codegen;
 
-internal class UintArrayComparer : IEqualityComparer<uint[]>
+internal sealed class UintArrayComparer : IEqualityComparer<uint[]>
 {
     public bool Equals(uint[]? x, uint[]? y)
     {
