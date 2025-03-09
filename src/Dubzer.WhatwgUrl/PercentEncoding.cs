@@ -2,11 +2,10 @@
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.Arm;
-using System.Runtime.Intrinsics.X86;
 using System.Text;
 
 namespace Dubzer.WhatwgUrl;
@@ -95,14 +94,17 @@ internal static class PercentEncoding
             xFromY |= Vector128.LessThanOrEqual(vecX, Vector128.Create((ushort)0x20));
             xFromY |= Vector128.GreaterThan(vecX, Vector128.Create((ushort)0x7E));
 
+            if (RequiresDotHandling(ref vecX))
+                throw new NotImplementedException();    // fallback to the slow path
+
             // the result is represented by the 8 most significant bits
             // where bit is set when the character has passed any checks
-            var result = xFromY.ExtractMostSignificantBits();
+            var requiresEncoding = xFromY.ExtractMostSignificantBits();
 
             // the mask will be 0x0000_0000
             // which means no characters have passed the checks,
             // and they don't need to be encoded
-            if (result == 0)
+            if (requiresEncoding == 0)
             {
                 sb.Append(slice);
                 continue;
@@ -111,7 +113,7 @@ internal static class PercentEncoding
             for (var bit = 0; bit < Vector128<ushort>.Count; bit++)
             {
                 var c = slice[bit];
-                if ((result & (1 << bit)) == 0)
+                if ((requiresEncoding & (1 << bit)) == 0)
                 {
                     sb.Append(c);
                 }
@@ -122,8 +124,13 @@ internal static class PercentEncoding
             }
         }
 
-        foreach (var c in input[^rest..])
+        var remaining = input[^rest..];
+        for (var i = 0; i < rest; i++)
         {
+            if (RequiresDotHandling(remaining, i))
+                throw new NotImplementedException();
+
+            var c = remaining[i];
             if (!(c <= 0x1F || c > 0x7E) && !PathEncodeSet.Contains(c))
             {
                 sb.Append(c);
@@ -134,6 +141,39 @@ internal static class PercentEncoding
             }
         }
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    // TODO: maybe use readonly ref
+    private static bool RequiresDotHandling(ref Vector128<ushort> vec)
+    {
+        var requiresDotHandling = Vector128.Equals(vec, Vector128.Create((ushort)'.')).ExtractMostSignificantBits();
+        while (requiresDotHandling != 0)
+        {
+            var nextDot = BitOperations.TrailingZeroCount(requiresDotHandling);
+
+            // Vector128<ushort>.Count is 8, so the maximum index is 7
+            const int maxIndex = 7;
+
+            var requiresHandling = nextDot is 0 or maxIndex
+                                   || vec[nextDot + 1] is '/' or '.'
+                                   || vec[nextDot - 1] is '/';
+
+            if (requiresHandling)
+                return true;
+
+            // Clear the processed bit and continue with the next one
+            requiresDotHandling &= ~(1U << nextDot);
+        }
+
+        return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool RequiresDotHandling(ReadOnlySpan<char> input, int offset) =>
+        input[offset] == '.'
+        && (offset == 0 || offset == input.Length - 1
+                        || input[offset + 1] is '/' or '.'
+                        || input[offset - 1] is '/');
 
     private static void AppendPercentChar(char c, StringBuilder sb)
     {
