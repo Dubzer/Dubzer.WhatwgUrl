@@ -73,9 +73,12 @@ internal static class PercentEncoding
         Encode(input, sb);
     }
 
-    public static void AppendEncodedPath(ReadOnlySpan<char> input, StringBuilder sb)
+    /// <returns>is handled</returns>
+    public static bool AppendEncodedPath(ReadOnlySpan<char> input, StringBuilder sb)
     {
+        var internalSb = new StringBuilder(input.Length);
         var (iterations, rest) = Math.DivRem(input.Length, Vector128<ushort>.Count);
+
         for (var i = 0; i < iterations; i++)
         {
             var slice = input.Slice(i * Vector128<ushort>.Count, Vector128<ushort>.Count);
@@ -94,11 +97,11 @@ internal static class PercentEncoding
             xFromY |= Vector128.LessThanOrEqual(vecX, Vector128.Create((ushort)0x20));
             xFromY |= Vector128.GreaterThan(vecX, Vector128.Create((ushort)0x7E));
 
-            if (RequiresDotHandling(ref vecX, input, i * Vector128<ushort>.Count))
-                throw new NotImplementedException();    // fallback to the slow path
+            var backslash = Vector128.Equals(vecX, Vector128.Create((ushort)'\\')).ExtractMostSignificantBits();
 
-            // the result is represented by the 8 most significant bits
-            // where bit is set when the character has passed any checks
+            if (RequiresDotHandling(ref vecX, input, i * Vector128<ushort>.Count) || backslash != 0)
+                return false;
+
             var requiresEncoding = xFromY.ExtractMostSignificantBits();
 
             // the mask will be 0x0000_0000
@@ -106,7 +109,7 @@ internal static class PercentEncoding
             // and they don't need to be encoded
             if (requiresEncoding == 0)
             {
-                sb.Append(slice);
+                internalSb.Append(slice);
                 continue;
             }
 
@@ -115,11 +118,11 @@ internal static class PercentEncoding
                 var c = slice[bit];
                 if ((requiresEncoding & (1 << bit)) == 0)
                 {
-                    sb.Append(c);
+                    internalSb.Append(c);
                 }
                 else
                 {
-                    AppendPercentChar(c, sb);
+                    AppendPercentChar(c, internalSb);
                 }
             }
         }
@@ -128,18 +131,21 @@ internal static class PercentEncoding
         for (var i = 0; i < rest; i++)
         {
             if (RequiresDotHandling(input, Vector128<ushort>.Count * iterations + i))
-                throw new NotImplementedException();
+                return false;
 
             var c = remaining[i];
             if (!(c <= 0x1F || c > 0x7E) && !PathEncodeSet.Contains(c))
             {
-                sb.Append(c);
+                internalSb.Append(c);
             }
             else
             {
-                AppendPercentChar(c, sb);
+                AppendPercentChar(c, internalSb);
             }
         }
+
+        sb.Append(internalSb);
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
