@@ -94,7 +94,7 @@ internal static class PercentEncoding
             xFromY |= Vector128.LessThanOrEqual(vecX, Vector128.Create((ushort)0x20));
             xFromY |= Vector128.GreaterThan(vecX, Vector128.Create((ushort)0x7E));
 
-            if (RequiresDotHandling(ref vecX))
+            if (RequiresDotHandling(ref vecX, input, i * Vector128<ushort>.Count))
                 throw new NotImplementedException();    // fallback to the slow path
 
             // the result is represented by the 8 most significant bits
@@ -127,7 +127,7 @@ internal static class PercentEncoding
         var remaining = input[^rest..];
         for (var i = 0; i < rest; i++)
         {
-            if (RequiresDotHandling(remaining, i))
+            if (RequiresDotHandling(input, Vector128<ushort>.Count * iterations + i))
                 throw new NotImplementedException();
 
             var c = remaining[i];
@@ -144,25 +144,23 @@ internal static class PercentEncoding
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     // TODO: maybe use readonly ref
-    private static bool RequiresDotHandling(ref Vector128<ushort> vec)
+    private static bool RequiresDotHandling(ref Vector128<ushort> vec, ReadOnlySpan<char> input, int offset)
     {
         var requiresDotHandling = Vector128.Equals(vec, Vector128.Create((ushort)'.')).ExtractMostSignificantBits();
         while (requiresDotHandling != 0)
         {
-            var nextDot = BitOperations.TrailingZeroCount(requiresDotHandling);
+            var nextDotInVec = BitOperations.TrailingZeroCount(requiresDotHandling);
+            var nextDot = offset + nextDotInVec;
 
-            // Vector128<ushort>.Count is 8, so the maximum index is 7
-            const int maxIndex = 7;
-
-            var requiresHandling = nextDot is 0 or maxIndex
-                                   || vec[nextDot + 1] is '/' or '.'
-                                   || vec[nextDot - 1] is '/';
+            var requiresHandling = nextDot == 0 || nextDot == input.Length - 1
+                                   || input[nextDot + 1] is '/' or '.'
+                                   || input[nextDot - 1] is '/';
 
             if (requiresHandling)
                 return true;
 
             // Clear the processed bit and continue with the next one
-            requiresDotHandling &= ~(1U << nextDot);
+            requiresDotHandling &= ~(1U << nextDotInVec);
         }
 
         return false;
