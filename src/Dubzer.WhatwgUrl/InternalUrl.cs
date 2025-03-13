@@ -1,15 +1,12 @@
 using System;
-using System.Buffers;
 using System.Collections.Frozen;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
-internal class InternalUrl
+internal partial class InternalUrl
 {
     internal string Scheme = "";
     internal string? Host;
@@ -27,7 +24,6 @@ internal class InternalUrl
     protected StringBuilder? AuthorityStringBuilder;
     protected string Input = "";
     protected int Length;
-    protected List<string> Path = [];
 
     protected bool IsSpecial;
 
@@ -42,10 +38,6 @@ internal class InternalUrl
     private bool _arrFlag;
 
     private string? _opaquePath;
-
-    private readonly SearchValues<char> _pathSegmentEndSet = SearchValues.Create("/?#");
-    // when url is special
-    private readonly SearchValues<char> _specialPathSegmentEndSet = SearchValues.Create("/?#\\");
 
     public virtual Result<InternalUrl> Parse(string input, InternalUrl? baseUrl = null)
     {
@@ -735,247 +727,6 @@ internal class InternalUrl
         }
     }
 
-
-    private bool _triedFastPath;
-
-    private void PathStateFast()
-    {
-        if (Path.Count != 0 || Scheme == Schemes.File)
-        {
-            Pointer--;
-            return;
-        }
-
-        var inputRemainder = Input.AsSpan()[Pointer..];
-
-        if (inputRemainder.Length == 0)
-        {
-            Path.Add("");
-            return;
-        }
-
-        var lastInPath = inputRemainder.IndexOfAny('?', '#');
-        var endsWithChar = '\u0000';
-        ReadOnlySpan<char> path;
-        if (lastInPath == -1)
-        {
-            lastInPath = inputRemainder.Length;
-            path = inputRemainder;
-        }
-        else
-        {
-            path = inputRemainder[..lastInPath];
-            endsWithChar = inputRemainder[lastInPath];
-        }
-
-
-        var vsb = new ValueStringBuilder(stackalloc char[Consts.MaxLengthOnStack.Char]);
-        var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
-
-        if (!handled)
-        {
-            // fallback to slow path
-            Pointer--;
-
-            vsb.Dispose();
-            return;
-        }
-
-        Path.Add(vsb.Length == 0 ? path.ToString() : vsb.ToString());
-
-        Pointer += lastInPath;
-        switch (endsWithChar)
-        {
-            case '?':
-                State = InternalUrlParserState.Query;
-                break;
-            case '#':
-                Buf.EnsureCapacity(Length - Pointer);
-                State = InternalUrlParserState.Fragment;
-                break;
-        }
-    }
-
-    protected virtual void PathState(char c)
-    {
-        if (!_triedFastPath)
-        {
-            _triedFastPath = true;
-            PathStateFast();
-            return;
-        }
-
-        if (Pointer == Length || c is '/' or '?' or '#' || (c == '\\' && IsSpecial))
-        {
-            if (IsSpecial && c == '\\')
-                Debug.WriteLine("invalid-reverse-solidus");
-
-            var str = Buf.ToString();
-            if (Util.IsDoubleDot(str))
-            {
-                ShortenPath();
-
-                if (c != '/' && !(c == '\\' && IsSpecial))
-                    Path.Add("");
-            }
-            else if (Util.IsSingleDot(str) && c != '/' && !(c == '\\' && IsSpecial))
-            {
-                Path.Add("");
-            }
-            else if (!Util.IsSingleDot(str))
-            {
-                if (Scheme == Schemes.File
-                    && Path.Count == 0
-                    && str.Length == 2
-                    && char.IsAsciiLetter(str[0])
-                    && str[1] is '|')
-                {
-                    str = $"{str[0]}:";
-                }
-
-                Path.Add(str);
-            }
-
-            Buf.Clear();
-            switch (c)
-            {
-                case '?':
-                    State = InternalUrlParserState.Query;
-                    break;
-                case '#':
-                    Buf.EnsureCapacity(Length - Pointer);
-                    State = InternalUrlParserState.Fragment;
-                    break;
-            }
-        }
-        else
-        {
-            // add parse error here
-            if (c == '%' && !char.IsAsciiHexDigit(NextChar(1)) && !char.IsAsciiHexDigit(NextChar(2)))
-                Debug.WriteLine("invalid-URL-unit");
-
-            AppendCurrentEncoded(c, PercentEncoding.PathEncodeSet);
-        }
-    }
-
-    /*
-    // https://url.spec.whatwg.org/#path-state
-    protected virtual void PathState(char c)
-    {
-        // Buf may be not empty when the state decides to change in the middle of parsing
-        var bufLength = Buf.Length;
-        // Adds a trailing slash
-        if (Pointer == Length && bufLength == 0)
-        {
-            Path.Add("");
-            return;
-        }
-
-        var inputRemainder = Input.AsSpan()[Pointer..];
-        if (IsSpecial && Scheme != Schemes.File && !inputRemainder.ContainsAny(FastPathDisallowed))
-        {
-            var lastInPath = inputRemainder.IndexOfAny('?', '#');
-
-            var endsWithChar = '\u0000';
-            ReadOnlySpan<char> path;
-            if (lastInPath == -1)
-            {
-                if (inputRemainder.Length == 0)
-                    return;
-
-                lastInPath = inputRemainder.Length;
-                path = inputRemainder;
-            }
-            else
-            {
-                path = inputRemainder[..lastInPath];
-                endsWithChar = inputRemainder[lastInPath];
-            }
-
-            Pointer += lastInPath;
-
-            PercentEncoding.AppendEncodedPath(path, Buf);
-            Path.Add(Buf.ToString());
-            Buf.Clear();
-
-            switch (endsWithChar)
-            {
-                case '?':
-                    State = InternalUrlParserState.Query;
-                    break;
-                case '#':
-                    Buf.EnsureCapacity(Length - Pointer);
-                    State = InternalUrlParserState.Fragment;
-                    break;
-            }
-
-            return;
-        }
-
-        var segmentEndsAt = inputRemainder.IndexOfAny(IsSpecial ? _specialPathSegmentEndSet : _pathSegmentEndSet);
-
-        if (segmentEndsAt == -1)
-            segmentEndsAt = inputRemainder.Length;
-
-        var segment = inputRemainder[..segmentEndsAt];
-
-        var endsWith = segmentEndsAt == inputRemainder.Length ? '\u0000' : inputRemainder[segmentEndsAt];
-
-        if (IsSpecial && endsWith == '\\')
-            Debug.WriteLine("invalid-reverse-solidus");
-
-        string? bufString = null;
-        if (bufLength != 0 && segment.Length == 0)
-        {
-            bufString = Buf.ToString();
-            segment = bufString;
-        }
-
-        if (Util.IsDoubleDot(segment))
-        {
-            ShortenPath();
-
-            if (endsWith != '/' && !(endsWith == '\\' && IsSpecial))
-                Path.Add("");
-        }
-        else if (Util.IsSingleDot(segment))
-        {
-            if (endsWith != '/' && !(endsWith == '\\' && IsSpecial))
-                Path.Add("");
-
-            // we ignore the single dot when there's a next path segment
-        }
-        else if (Scheme == Schemes.File
-                 && Path.Count == 0
-                 && segment.Length == 2
-                 && char.IsAsciiLetter(segment[0])
-                 && segment[1] is '|')
-        {
-            Path.Add($"{segment[0]}:");
-        }
-        else
-        {
-            PercentEncoding.AppendEncodedPath(segment, Buf);
-            Path.Add(bufString ?? Buf.ToString());
-        }
-
-        Pointer += SegmentLength(segment);
-
-        Debug.WriteLine("Processed path segment: " + segment.ToString());
-        Buf.Clear();
-
-        switch (endsWith)
-        {
-            case '?':
-                State = InternalUrlParserState.Query;
-                break;
-            case '#':
-                Buf.EnsureCapacity(Length - Pointer);
-                State = InternalUrlParserState.Fragment;
-                break;
-        }
-    }
-*/
     // https://url.spec.whatwg.org/#cannot-be-a-base-url-path-state
     private void OpaquePathState(char c)
     {
@@ -1192,22 +943,6 @@ internal class InternalUrl
         }
 
         return "null";
-    }
-
-    // https://url.spec.whatwg.org/#url-path-serializer
-    internal string SerializePathname()
-    {
-        if (_opaquePath != null)
-            return _opaquePath;
-
-        var sb = new StringBuilder();
-        foreach (var segment in Path)
-        {
-            sb.Append('/');
-            sb.Append(segment);
-        }
-
-        return sb.ToString();
     }
 
     protected virtual int SegmentLength(ReadOnlySpan<char> input) => input.Length;
