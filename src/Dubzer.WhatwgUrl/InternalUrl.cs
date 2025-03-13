@@ -769,7 +769,7 @@ internal class InternalUrl
         }
 
 
-        var vsb = new ValueStringBuilder(stackalloc char[512]);
+        var vsb = new ValueStringBuilder(stackalloc char[Consts.MaxLengthOnStack.Char]);
         var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
 
         if (!handled)
