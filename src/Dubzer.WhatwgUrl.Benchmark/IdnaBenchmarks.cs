@@ -10,11 +10,11 @@ using Dubzer.WhatwgUrl.Uts46;
 namespace Dubzer.WhatwgUrl.Benchmark;
 
 [MemoryDiagnoser]
-internal class IdnaBenchmarks
+public class IdnaBenchmarks
 {
 	private string[] _data = null!;
 
-	internal enum TestSet
+	public enum TestSet
 	{
 		FullIdnaTestV2,
 		ValidOnlyIdnaTestV2,

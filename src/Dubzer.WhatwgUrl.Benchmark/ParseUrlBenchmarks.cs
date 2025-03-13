@@ -9,9 +9,9 @@ using Dubzer.WhatwgUrl.Tests.Models;
 namespace Dubzer.WhatwgUrl.Benchmark;
 
 [MemoryDiagnoser]
-internal class ParseUrlBenchmarks
+public class ParseUrlBenchmarks
 {
-	internal enum TestSet
+	public enum TestSet
 	{
 		UrlTestData,
 		UrlTestDataValidOnly,
