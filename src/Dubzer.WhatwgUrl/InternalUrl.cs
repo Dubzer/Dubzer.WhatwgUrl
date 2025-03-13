@@ -768,16 +768,15 @@ internal class InternalUrl
         }
 
 
-        var internalBuf = new StringBuilder(path.Length);
-        var canBeProcessed = PercentEncoding.AppendEncodedPath(path, internalBuf);
-        if (!canBeProcessed)
+        var (handled, pathBuf) = PercentEncoding.AppendEncodedPath(path);
+        if (!handled)
         {
             // fallback to slow path
             Pointer--;
             return;
         }
 
-        Path.Add(internalBuf.ToString());
+        Path.Add(pathBuf != null ? pathBuf.ToString() : path.ToString());
 
         Pointer += lastInPath;
         switch (endsWithChar)

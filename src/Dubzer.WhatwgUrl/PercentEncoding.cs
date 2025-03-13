@@ -73,15 +73,20 @@ internal static class PercentEncoding
         Encode(input, sb);
     }
 
-    /// <returns>is handled</returns>
-    public static bool AppendEncodedPath(ReadOnlySpan<char> input, StringBuilder sb)
+    /// <returns>Handled - if true, doesn't require to fallback</returns>
+    public static (bool Handled, StringBuilder? pathBuf) AppendEncodedPath(ReadOnlySpan<char> input)
     {
-        var internalSb = new StringBuilder(input.Length);
-        var (iterations, rest) = Math.DivRem(input.Length, Vector128<ushort>.Count);
+        StringBuilder? sb = null;
+        var asIsOffset = 0;
+
+        var vectorCount = Vector128<ushort>.Count;
+        var (iterations, rest) = Math.DivRem(input.Length, vectorCount);
 
         for (var i = 0; i < iterations; i++)
         {
-            var slice = input.Slice(i * Vector128<ushort>.Count, Vector128<ushort>.Count);
+            var offset = i * vectorCount;
+
+            var slice = input.Slice(offset, vectorCount);
             var vecX = Vector128.Create(MemoryMarshal.Cast<char, ushort>(slice));
             var xFromY = Vector128<ushort>.Zero;
 
@@ -100,8 +105,8 @@ internal static class PercentEncoding
             var backslash = Vector128.Equals(vecX, Vector128.Create((ushort)'\\')).ExtractMostSignificantBits();
             var percent = Vector128.Equals(vecX, Vector128.Create((ushort)'%')).ExtractMostSignificantBits();
 
-            if (RequiresDotHandling(ref vecX, input, i * Vector128<ushort>.Count) || backslash != 0 || percent != 0)
-                return false;
+            if (RequiresDotHandling(ref vecX, input, offset) || backslash != 0 || percent != 0)
+                return (false, null);
 
             var requiresEncoding = xFromY.ExtractMostSignificantBits();
 
@@ -110,8 +115,19 @@ internal static class PercentEncoding
             // and they don't need to be encoded
             if (requiresEncoding == 0)
             {
-                internalSb.Append(slice);
+                if (sb == null)
+                    asIsOffset += vectorCount;
+                else
+                    sb.Append(slice);
+
                 continue;
+            }
+
+            // we can't use the input as is anymore because there are characters that need to be encoded
+            if (sb == null)
+            {
+                sb = new StringBuilder(input.Length);
+                sb.Append(input[..asIsOffset]);
             }
 
             for (var bit = 0; bit < Vector128<ushort>.Count; bit++)
@@ -119,11 +135,11 @@ internal static class PercentEncoding
                 var c = slice[bit];
                 if ((requiresEncoding & (1 << bit)) == 0)
                 {
-                    internalSb.Append(c);
+                    sb.Append(c);
                 }
                 else
                 {
-                    AppendPercentChar(c, internalSb);
+                    AppendPercentChar(c, sb);
                 }
             }
         }
@@ -132,21 +148,29 @@ internal static class PercentEncoding
         for (var i = 0; i < rest; i++)
         {
             if (RequiresDotHandling(input, Vector128<ushort>.Count * iterations + i) || remaining[i] is '\\' or '%')
-                return false;
+                return (false, null);
 
             var c = remaining[i];
             if (!(c <= 0x1F || c > 0x7E) && !PathEncodeSet.Contains(c))
             {
-                internalSb.Append(c);
+                if (sb == null)
+                    asIsOffset++;
+                else
+                    sb.Append(c);
             }
             else
             {
-                AppendPercentChar(c, internalSb);
+                if (sb == null)
+                {
+                    sb = new StringBuilder(input.Length);
+                    sb.Append(input[..asIsOffset]);
+                }
+
+                AppendPercentChar(c, sb);
             }
         }
 
-        sb.Append(internalSb);
-        return true;
+        return (true, sb);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
