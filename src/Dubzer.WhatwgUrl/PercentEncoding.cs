@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Text;
+using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
@@ -74,10 +75,15 @@ internal static class PercentEncoding
     }
 
     /// <returns>Handled - if true, doesn't require to fallback</returns>
-    public static (bool Handled, StringBuilder? pathBuf) AppendEncodedPath(ReadOnlySpan<char> input)
+    public static bool AppendEncodedPath(ReadOnlySpan<char> input, ref ValueStringBuilder vsb)
     {
-        StringBuilder? sb = null;
+        // this offset allows to skip copying path to the vsb
+        // when there are no characters that need to be encoded
         var asIsOffset = 0;
+
+        // -1 means that there are characters that need to be encoded,
+        // so we can't use that optimization
+        const int cannotUseAsIs = -1;
 
         var vectorCount = Vector128<ushort>.Count;
         var (iterations, rest) = Math.DivRem(input.Length, vectorCount);
@@ -106,7 +112,7 @@ internal static class PercentEncoding
             var percent = Vector128.Equals(vecX, Vector128.Create((ushort)'%')).ExtractMostSignificantBits();
 
             if (RequiresDotHandling(ref vecX, input, offset) || backslash != 0 || percent != 0)
-                return (false, null);
+                return false;
 
             var requiresEncoding = xFromY.ExtractMostSignificantBits();
 
@@ -115,19 +121,19 @@ internal static class PercentEncoding
             // and they don't need to be encoded
             if (requiresEncoding == 0)
             {
-                if (sb == null)
+                if (asIsOffset != cannotUseAsIs)
                     asIsOffset += vectorCount;
                 else
-                    sb.Append(slice);
+                    vsb.Append(slice);
 
                 continue;
             }
 
             // we can't use the input as is anymore because there are characters that need to be encoded
-            if (sb == null)
+            if (asIsOffset != cannotUseAsIs)
             {
-                sb = new StringBuilder(input.Length);
-                sb.Append(input[..asIsOffset]);
+                vsb.Append(input[..asIsOffset]);
+                asIsOffset = cannotUseAsIs;
             }
 
             for (var bit = 0; bit < Vector128<ushort>.Count; bit++)
@@ -135,11 +141,11 @@ internal static class PercentEncoding
                 var c = slice[bit];
                 if ((requiresEncoding & (1 << bit)) == 0)
                 {
-                    sb.Append(c);
+                    vsb.Append(c);
                 }
                 else
                 {
-                    AppendPercentChar(c, sb);
+                    AppendPercentChar(c, ref vsb);
                 }
             }
         }
@@ -148,29 +154,29 @@ internal static class PercentEncoding
         for (var i = 0; i < rest; i++)
         {
             if (RequiresDotHandling(input, Vector128<ushort>.Count * iterations + i) || remaining[i] is '\\' or '%')
-                return (false, null);
+                return false;
 
             var c = remaining[i];
             if (!(c <= 0x1F || c > 0x7E) && !PathEncodeSet.Contains(c))
             {
-                if (sb == null)
+                if (asIsOffset != cannotUseAsIs)
                     asIsOffset++;
                 else
-                    sb.Append(c);
+                    vsb.Append(c);
             }
             else
             {
-                if (sb == null)
+                if (asIsOffset != cannotUseAsIs)
                 {
-                    sb = new StringBuilder(input.Length);
-                    sb.Append(input[..asIsOffset]);
+                    vsb.Append(input[..asIsOffset]);
+                    asIsOffset = cannotUseAsIs;
                 }
 
-                AppendPercentChar(c, sb);
+                AppendPercentChar(c, ref vsb);
             }
         }
 
-        return (true, sb);
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -219,6 +225,20 @@ internal static class PercentEncoding
         }
     }
 
+    private static void AppendPercentChar(char c, ref ValueStringBuilder vsb)
+    {
+        Span<byte> buf = stackalloc byte[3];
+        var written = EncodeCharToUtf8(c, buf);
+
+        // a buffer to store hex representation of the current number
+        Span<char> hex = stackalloc char[2];
+        for (var w = 0; w < written; w++)
+        {
+            vsb.Append('%');
+            Util.ByteFormatX2(buf[w], hex);
+            vsb.Append(hex);
+        }
+    }
 
     internal static void AppendEncoded(Rune input, StringBuilder sb, FrozenSet<char> set)
     {

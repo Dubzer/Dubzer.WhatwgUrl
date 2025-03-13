@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
@@ -768,15 +769,19 @@ internal class InternalUrl
         }
 
 
-        var (handled, pathBuf) = PercentEncoding.AppendEncodedPath(path);
+        var vsb = new ValueStringBuilder(stackalloc char[512]);
+        var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
+
         if (!handled)
         {
             // fallback to slow path
             Pointer--;
+
+            vsb.Dispose();
             return;
         }
 
-        Path.Add(pathBuf != null ? pathBuf.ToString() : path.ToString());
+        Path.Add(vsb.Length == 0 ? path.ToString() : vsb.ToString());
 
         Pointer += lastInPath;
         switch (endsWithChar)
