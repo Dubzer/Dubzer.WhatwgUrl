@@ -734,8 +734,127 @@ internal class InternalUrl
         }
     }
 
-    private static readonly SearchValues<char> FastPathDisallowed = SearchValues.Create(".%\\");
 
+    private bool _triedFastPath;
+
+    private void PathStateFast()
+    {
+        if (Path.Count != 0 || Scheme == Schemes.File)
+        {
+            Pointer--;
+            return;
+        }
+
+        var inputRemainder = Input.AsSpan()[Pointer..];
+
+        if (inputRemainder.Length == 0)
+        {
+            Path.Add("");
+            return;
+        }
+
+        var lastInPath = inputRemainder.IndexOfAny('?', '#');
+        var endsWithChar = '\u0000';
+        ReadOnlySpan<char> path;
+        if (lastInPath == -1)
+        {
+            lastInPath = inputRemainder.Length;
+            path = inputRemainder;
+        }
+        else
+        {
+            path = inputRemainder[..lastInPath];
+            endsWithChar = inputRemainder[lastInPath];
+        }
+
+
+        var internalBuf = new StringBuilder(path.Length);
+        var canBeProcessed = PercentEncoding.AppendEncodedPath(path, internalBuf);
+        if (!canBeProcessed)
+        {
+            // fallback to slow path
+            Pointer--;
+            return;
+        }
+
+        Path.Add(internalBuf.ToString());
+
+        Pointer += lastInPath;
+        switch (endsWithChar)
+        {
+            case '?':
+                State = InternalUrlParserState.Query;
+                break;
+            case '#':
+                Buf.EnsureCapacity(Length - Pointer);
+                State = InternalUrlParserState.Fragment;
+                break;
+        }
+    }
+
+    protected virtual void PathState(char c)
+    {
+        if (!_triedFastPath)
+        {
+            _triedFastPath = true;
+            PathStateFast();
+            return;
+        }
+
+        if (Pointer == Length || c is '/' or '?' or '#' || (c == '\\' && IsSpecial))
+        {
+            if (IsSpecial && c == '\\')
+                Debug.WriteLine("invalid-reverse-solidus");
+
+            var str = Buf.ToString();
+            if (Util.IsDoubleDot(str))
+            {
+                ShortenPath();
+
+                if (c != '/' && !(c == '\\' && IsSpecial))
+                    Path.Add("");
+            }
+            else if (Util.IsSingleDot(str) && c != '/' && !(c == '\\' && IsSpecial))
+            {
+                Path.Add("");
+            }
+            else if (!Util.IsSingleDot(str))
+            {
+                if (Scheme == Schemes.File
+                    && Path.Count == 0
+                    && str.Length == 2
+                    && char.IsAsciiLetter(str[0])
+                    && str[1] is '|')
+                {
+                    str = $"{str[0]}:";
+                }
+
+                Path.Add(str);
+            }
+
+            Buf.Clear();
+            switch (c)
+            {
+                case '?':
+                    State = InternalUrlParserState.Query;
+                    break;
+                case '#':
+                    Buf.EnsureCapacity(Length - Pointer);
+                    State = InternalUrlParserState.Fragment;
+                    break;
+            }
+        }
+        else
+        {
+            // add parse error here
+            if (c == '%' && !char.IsAsciiHexDigit(NextChar(1)) && !char.IsAsciiHexDigit(NextChar(2)))
+                Debug.WriteLine("invalid-URL-unit");
+
+            AppendCurrentEncoded(c, PercentEncoding.PathEncodeSet);
+        }
+    }
+
+    /*
     // https://url.spec.whatwg.org/#path-state
     protected virtual void PathState(char c)
     {
@@ -852,7 +971,7 @@ internal class InternalUrl
                 break;
         }
     }
-
+*/
     // https://url.spec.whatwg.org/#cannot-be-a-base-url-path-state
     private void OpaquePathState(char c)
     {
