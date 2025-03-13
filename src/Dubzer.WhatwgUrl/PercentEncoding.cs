@@ -98,8 +98,9 @@ internal static class PercentEncoding
             xFromY |= Vector128.GreaterThan(vecX, Vector128.Create((ushort)0x7E));
 
             var backslash = Vector128.Equals(vecX, Vector128.Create((ushort)'\\')).ExtractMostSignificantBits();
+            var percent = Vector128.Equals(vecX, Vector128.Create((ushort)'%')).ExtractMostSignificantBits();
 
-            if (RequiresDotHandling(ref vecX, input, i * Vector128<ushort>.Count) || backslash != 0)
+            if (RequiresDotHandling(ref vecX, input, i * Vector128<ushort>.Count) || backslash != 0 || percent != 0)
                 return false;
 
             var requiresEncoding = xFromY.ExtractMostSignificantBits();
@@ -130,7 +131,7 @@ internal static class PercentEncoding
         var remaining = input[^rest..];
         for (var i = 0; i < rest; i++)
         {
-            if (RequiresDotHandling(input, Vector128<ushort>.Count * iterations + i))
+            if (RequiresDotHandling(input, Vector128<ushort>.Count * iterations + i) || remaining[i] is '\\' or '%')
                 return false;
 
             var c = remaining[i];
