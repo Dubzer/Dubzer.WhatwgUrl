@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 
 namespace Dubzer.WhatwgUrl.BclInternal;
 
+[DebuggerDisplayAttribute(null)]    // avoid side effects from debugger calling ToString lol
 internal ref partial struct ValueStringBuilder
 {
     private char[]? _arrayToReturnToPool;
