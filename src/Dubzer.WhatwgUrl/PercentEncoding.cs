@@ -176,6 +176,9 @@ internal static class PercentEncoding
             }
         }
 
+        if (asIsOffset != cannotUseAsIs)
+            vsb.Append(input);
+
         return true;
     }
 

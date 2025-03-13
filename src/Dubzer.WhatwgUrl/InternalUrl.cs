@@ -324,6 +324,7 @@ internal partial class InternalUrl
             Port = BaseUrl.Port;
             Path = [..BaseUrl.Path];
             Query = BaseUrl.Query;
+            _firstPathSegmentWithSlash = BaseUrl._firstPathSegmentWithSlash;
 
             if (c == '?')
             {
@@ -825,29 +826,6 @@ internal partial class InternalUrl
         Pointer + n >= Length
             ? '\0'
             : Input[Pointer + n];
-
-    // https://url.spec.whatwg.org/#shorten-a-urls-path
-    protected void ShortenPath()
-    {
-        // If url’s scheme is "file", path’s size is 1, and path[0] is a normalized Windows drive letter, then return.
-        if (Scheme == Schemes.File && Path.Count == 1 && IsNormalizedWindowDriveLetter(Path[0]))
-            return;
-
-        // Remove path’s last item, if any.
-        if (Path.Count > 0)
-        {
-            var lastPart = Path[^1];
-            var slashInPart = lastPart.LastIndexOf('/');
-            if (slashInPart != -1)
-            {
-                Path[^1] = lastPart[..slashInPart];
-            }
-            else
-            {
-                Path.RemoveAt(Path.Count - 1);
-            }
-        }
-    }
 
     // https://url.spec.whatwg.org/#normalized-windows-drive-letter
     private static bool IsNormalizedWindowDriveLetter(string input) =>

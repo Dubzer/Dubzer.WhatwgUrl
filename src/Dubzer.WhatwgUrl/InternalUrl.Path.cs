@@ -11,6 +11,13 @@ internal partial class InternalUrl
     private bool _triedFastPath;
     protected List<string> Path = [];
 
+    /// <summary>
+    /// this is a special case for the PathStateFast,
+    /// which outputs path as a single string
+    /// that doesn't require prepending '/' on serialization
+    /// </summary>
+    private bool _firstPathSegmentWithSlash;
+
     protected virtual void PathState(char c)
     {
         if (!_triedFastPath)
@@ -86,7 +93,8 @@ internal partial class InternalUrl
 
         if (inputRemainder.Length == 0)
         {
-            Path.Add("");
+            Path.Add("/");
+            _firstPathSegmentWithSlash = true;
             return;
         }
 
@@ -106,6 +114,8 @@ internal partial class InternalUrl
 
 
         var vsb = new ValueStringBuilder(stackalloc char[Consts.MaxLengthOnStack.Char]);
+        vsb.Append('/');
+
         var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
 
         if (!handled)
@@ -118,6 +128,7 @@ internal partial class InternalUrl
         }
 
         Path.Add(vsb.Length == 0 ? path.ToString() : vsb.ToString());
+        _firstPathSegmentWithSlash = true;
 
         Pointer += lastInPath;
         switch (endsWithChar)
@@ -132,17 +143,59 @@ internal partial class InternalUrl
         }
     }
 
+    // https://url.spec.whatwg.org/#shorten-a-urls-path
+    protected void ShortenPath()
+    {
+        // If url’s scheme is "file", path’s size is 1, and path[0] is a normalized Windows drive letter, then return.
+        if (Scheme == Schemes.File && Path.Count == 1 && IsNormalizedWindowDriveLetter(Path[0]))
+            return;
+
+        // Remove path’s last item, if any.
+        if (Path.Count == 0)
+            return;
+
+        var lastPart = Path[^1];
+        var slashInPart = lastPart.LastIndexOf('/');
+        if (slashInPart > 0)
+        {
+            Path[^1] = lastPart[..slashInPart];
+        }
+        else
+        {
+            // we no longer have a segment with handled slash
+            if (Path.Count == 1)
+                _firstPathSegmentWithSlash = false;
+
+            Path.RemoveAt(Path.Count - 1);
+        }
+    }
+
     // https://url.spec.whatwg.org/#url-path-serializer
     internal string SerializePathname()
     {
         if (_opaquePath != null)
             return _opaquePath;
 
+        // we can skip sb allocation because we know that first segment already starts with '/'
+        // and there's only one segment
+        if (_firstPathSegmentWithSlash && Path.Count == 1)
+        {
+            return Path[0];
+        }
+
+        var i = 0;
         var sb = new StringBuilder();
-        foreach (var segment in Path)
+
+        if (_firstPathSegmentWithSlash)
+        {
+            sb.Append(Path[0]);
+            i++;
+        }
+
+        for (; i < Path.Count; i++)
         {
             sb.Append('/');
-            sb.Append(segment);
+            sb.Append(Path[i]);
         }
 
         return sb.ToString();
