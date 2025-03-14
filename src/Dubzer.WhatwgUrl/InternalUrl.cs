@@ -923,8 +923,6 @@ internal partial class InternalUrl
         return "null";
     }
 
-    protected virtual int SegmentLength(ReadOnlySpan<char> input) => input.Length;
-
     private void UpdateScheme(string scheme)
     {
         Scheme = scheme;

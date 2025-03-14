@@ -175,16 +175,4 @@ internal sealed class InternalUrlRune : InternalUrl
         Pointer + n >= Length
             ? '\0'
             : _inputRunes[Pointer + n].ToChar();
-
-    protected override int SegmentLength(ReadOnlySpan<char> input)
-    {
-        var length = 0;
-        var enumerator = input.EnumerateRunes();
-        while (enumerator.MoveNext())
-        {
-            length++;
-        }
-
-        return length;
-    }
 }
