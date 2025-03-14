@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
@@ -80,6 +81,8 @@ internal partial class InternalUrl
         }
     }
 
+    private static readonly SearchValues<char> LastInPathSearchValues = SearchValues.Create("?#");
+
     /// This implementation handles the whole path in one state machine iteration
     private void PathStateFast()
     {
@@ -98,7 +101,7 @@ internal partial class InternalUrl
             return;
         }
 
-        var lastInPath = inputRemainder.IndexOfAny('?', '#');
+        var lastInPath = inputRemainder.IndexOfAny(LastInPathSearchValues);
         var endsWithChar = '\u0000';
         ReadOnlySpan<char> path;
         if (lastInPath == -1)
