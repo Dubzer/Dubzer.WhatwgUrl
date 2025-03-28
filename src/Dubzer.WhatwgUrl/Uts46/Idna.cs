@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -256,7 +256,7 @@ internal static class Idna
         const int ZWJ = 0x200D;
 
         var codepoints = MemoryMarshal.Cast<Rune, int>(label);
-        var index = codepoints.IndexOfAny(ZWNJ, ZWJ);;
+        var index = codepoints.IndexOfAny(ZWNJ, ZWJ);
 
         if (index == -1)
             return true;
