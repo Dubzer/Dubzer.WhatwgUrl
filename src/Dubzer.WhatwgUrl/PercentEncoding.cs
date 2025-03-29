@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Buffers;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
@@ -14,31 +15,35 @@ namespace Dubzer.WhatwgUrl;
 internal static class PercentEncoding
 {
     // additional characters that are not in the c0 control percent encode set
-    private static readonly FrozenSet<char> QueryEncodeSet = new[]
-    {
-        ' ', '"', '#', '<', '>'
-    }.ToFrozenSet();
+    private static readonly SearchValues<char> QueryEncodeSet = SearchValues.Create(
+        [
+            ' ', '"', '#', '<', '>'
+        ]
+    );
 
     // https://url.spec.whatwg.org/#path-percent-encode-set
-    internal static readonly FrozenSet<char> PathEncodeSet = new[]
-    {
-        ' ', '"', '#', '<', '>',
-        '?', '`', '{', '}'
-    }.ToFrozenSet();
+    internal static readonly SearchValues<char> PathEncodeSet = SearchValues.Create(
+        [
+            ' ', '"', '#', '<', '>',
+            '?', '`', '{', '}'
+        ]
+    );
 
     // https://url.spec.whatwg.org/#fragment-percent-encode-set
-    internal static readonly FrozenSet<char> FragmentEncodeSet = new[]
-    {
-        ' ', '"', '<', '>', '`'
-    }.ToFrozenSet();
+    internal static readonly SearchValues<char> FragmentEncodeSet = SearchValues.Create(
+        [
+            ' ', '"', '<', '>', '`'
+        ]
+    );
 
     // https://url.spec.whatwg.org/#userinfo-percent-encode-set
-    internal static readonly FrozenSet<char> UserInfoEncodeSet = new[]
-    {
-        ' ', '"', '#', '<', '>',
-        '?', '`', '{', '}',
-        '/', ':', ';', '=', '@', '[', '\\', ']', '^', '|'
-    }.ToFrozenSet();
+    internal static readonly SearchValues<char> UserInfoEncodeSet = SearchValues.Create(
+        [
+            ' ', '"', '#', '<', '>',
+            '?', '`', '{', '}',
+            '/', ':', ';', '=', '@', '[', '\\', ']', '^', '|'
+        ]
+    );
 
     // https://url.spec.whatwg.org/#c0-control-percent-encode-set
     public static bool InC0ControlPercentEncodeSet(char c) =>
@@ -243,7 +248,7 @@ internal static class PercentEncoding
         }
     }
 
-    internal static void AppendEncoded(Rune input, StringBuilder sb, FrozenSet<char> set)
+    internal static void AppendEncoded(Rune input, StringBuilder sb, SearchValues<char> set)
     {
         var c = input.ToChar();
         if (!(c <= 0x1F || c > 0x7E) && !set.Contains(c))
@@ -265,7 +270,7 @@ internal static class PercentEncoding
         }
     }
 
-    internal static void AppendEncoded(char input, StringBuilder sb, FrozenSet<char> set)
+    internal static void AppendEncoded(char input, StringBuilder sb, SearchValues<char> set)
     {
         if (!InC0ControlPercentEncodeSet(input) && !set.Contains(input))
         {

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Globalization;
@@ -66,7 +67,7 @@ internal partial class InternalUrl
         Buf.Append(c);
     }
 
-    protected virtual void AppendCurrentEncoded(char c, FrozenSet<char> set)
+    protected virtual void AppendCurrentEncoded(char c, SearchValues<char> set)
     {
         PercentEncoding.AppendEncoded(c, Buf, set);
     }

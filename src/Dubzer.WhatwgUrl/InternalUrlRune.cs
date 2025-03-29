@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Buffers;
 using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Linq;
@@ -47,7 +48,7 @@ internal sealed class InternalUrlRune : InternalUrl
         Buf.AppendRune(_currentRune);
     }
 
-    protected override void AppendCurrentEncoded(char c, FrozenSet<char> set)
+    protected override void AppendCurrentEncoded(char c, SearchValues<char> set)
     {
         PercentEncoding.AppendEncoded(_currentRune, Buf, set);
     }
