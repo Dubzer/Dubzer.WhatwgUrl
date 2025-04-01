@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -8,8 +8,6 @@ namespace Dubzer.WhatwgUrl;
 
 internal static class HostParser
 {
-    private static readonly UTF8Encoding Utf8WithoutBom = new(false);
-
     private static readonly SearchValues<char> ForbiddenHostCodePoints = SearchValues.Create([
         '\u0000', '\u0009', '\u000A', '\u000D', '\u0020', '#', '/', ':', '<', '>', '?', '@', '[', '\\', ']', '^', '|'
     ]);
@@ -124,7 +122,7 @@ internal static class HostParser
         else
         {
             // 4.Let domain be the result of running UTF-8 decode without BOM on the percent-decoding of input.
-            var domain = Utf8WithoutBom.GetString(PercentEncoding.PercentDecode(input));
+            var domain = PercentEncoding.PercentDecode(input);
 
             var asciiDomain = Idna.ToAscii(domain);
             if (string.IsNullOrEmpty(asciiDomain))
