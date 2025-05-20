@@ -65,9 +65,9 @@ internal partial class InternalUrl
         Buf.Append(c);
     }
 
-    protected virtual void AppendCurrentEncoded(char c, in ReadOnlySpan<byte> set)
+    protected virtual void AppendCurrentEncoded(char c, ReadOnlySpan<byte> set)
     {
-        PercentEncoding.AppendEncoded(c, Buf, in set);
+        PercentEncoding.AppendEncoded(c, Buf, set);
     }
 
     protected virtual void AppendCurrentEncodedInC0(char c)

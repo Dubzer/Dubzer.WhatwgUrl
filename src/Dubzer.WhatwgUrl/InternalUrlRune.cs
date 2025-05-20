@@ -46,9 +46,9 @@ internal sealed class InternalUrlRune : InternalUrl
         Buf.AppendRune(_currentRune);
     }
 
-    protected override void AppendCurrentEncoded(char c, in ReadOnlySpan<byte> set)
+    protected override void AppendCurrentEncoded(char c, ReadOnlySpan<byte> set)
     {
-        PercentEncoding.AppendEncoded(_currentRune, Buf, in set);
+        PercentEncoding.AppendEncoded(_currentRune, Buf, set);
     }
 
     protected override void AppendCurrentEncodedInC0(char c)
