@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Frozen;
+using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -47,7 +46,7 @@ internal sealed class InternalUrlRune : InternalUrl
         Buf.AppendRune(_currentRune);
     }
 
-    protected override void AppendCurrentEncoded(char c, FrozenSet<char> set)
+    protected override void AppendCurrentEncoded(char c, ReadOnlySpan<byte> set)
     {
         PercentEncoding.AppendEncoded(_currentRune, Buf, set);
     }
@@ -78,7 +77,7 @@ internal sealed class InternalUrlRune : InternalUrl
                     continue;
                 }
 
-                PercentEncoding.AppendEncoded(rune, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSet);
+                PercentEncoding.AppendEncoded(rune, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSetLookup);
             }
 
             Buf.Clear();
@@ -166,7 +165,7 @@ internal sealed class InternalUrlRune : InternalUrl
             if (c == '%' && !char.IsAsciiHexDigit(NextChar(1)) && !char.IsAsciiHexDigit(NextChar(2)))
                 Debug.WriteLine("invalid-URL-unit");
 
-            AppendCurrentEncoded(c, PercentEncoding.PathEncodeSet);
+            AppendCurrentEncoded(c, PercentEncoding.PathEncodeSetLookup);
         }
     }
 

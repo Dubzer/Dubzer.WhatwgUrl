@@ -77,16 +77,16 @@ internal partial class InternalUrl
             if (c == '%' && !char.IsAsciiHexDigit(NextChar(1)) && !char.IsAsciiHexDigit(NextChar(2)))
                 Debug.WriteLine("invalid-URL-unit");
 
-            AppendCurrentEncoded(c, PercentEncoding.PathEncodeSet);
+            AppendCurrentEncoded(c, PercentEncoding.PathEncodeSetLookup);
         }
     }
 
     private static readonly SearchValues<char> LastInPathSearchValues = SearchValues.Create("?#");
 
-    /// This implementation handles the whole path in one state machine iteration
+    // This implementation handles the whole path in one state machine iteration
     private void PathStateFast()
     {
-        if (Path.Count != 0 || Scheme == Schemes.File)
+        if (Path.Count != 0 || string.Equals(Scheme, Schemes.File, StringComparison.Ordinal))
         {
             Pointer--;
             return;
@@ -115,34 +115,39 @@ internal partial class InternalUrl
             endsWithChar = inputRemainder[lastInPath];
         }
 
-
-        var vsb = new ValueStringBuilder(stackalloc char[Consts.MaxLengthOnStack.Char]);
-        vsb.Append('/');
-
-        var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
-
-        if (!handled)
+        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
+        try
         {
-            // fallback to slow path
-            Pointer--;
+            vsb.Append('/');
 
-            vsb.Dispose();
-            return;
+            var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
+
+            if (!handled)
+            {
+                // fallback to slow path
+                Pointer--;
+
+                return;
+            }
+
+            Path.Add(vsb.Length == 0 ? path.ToString() : vsb.ToString());
+            _firstPathSegmentWithSlash = true;
+
+            Pointer += lastInPath;
+            switch (endsWithChar)
+            {
+                case '?':
+                    State = InternalUrlParserState.Query;
+                    break;
+                case '#':
+                    Buf.EnsureCapacity(Length - Pointer);
+                    State = InternalUrlParserState.Fragment;
+                    break;
+            }
         }
-
-        Path.Add(vsb.Length == 0 ? path.ToString() : vsb.ToString());
-        _firstPathSegmentWithSlash = true;
-
-        Pointer += lastInPath;
-        switch (endsWithChar)
+        finally
         {
-            case '?':
-                State = InternalUrlParserState.Query;
-                break;
-            case '#':
-                Buf.EnsureCapacity(Length - Pointer);
-                State = InternalUrlParserState.Fragment;
-                break;
+            vsb.Dispose();
         }
     }
 

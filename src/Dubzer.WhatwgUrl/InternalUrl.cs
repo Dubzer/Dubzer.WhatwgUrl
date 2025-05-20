@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
@@ -66,7 +65,7 @@ internal partial class InternalUrl
         Buf.Append(c);
     }
 
-    protected virtual void AppendCurrentEncoded(char c, FrozenSet<char> set)
+    protected virtual void AppendCurrentEncoded(char c, ReadOnlySpan<byte> set)
     {
         PercentEncoding.AppendEncoded(c, Buf, set);
     }
@@ -78,7 +77,7 @@ internal partial class InternalUrl
 
     #region State machine switch
 
-        protected void RunStateMachine(char c)
+    protected void RunStateMachine(char c)
     {
         switch (State)
         {
@@ -192,7 +191,7 @@ internal partial class InternalUrl
         // 1. If c is an ASCII alphanumeric, U+002B (+), U+002D (-), or U+002E (.),
         if (char.IsAsciiLetterOrDigit(c) || c is '+' or '-' or '.')
         {
-            Buf.Append(char.ToLowerInvariant(c));   // append c, lowercased, to buffer.
+            Buf.Append(char.ToLowerInvariant(c)); // append c, lowercased, to buffer.
         }
         // 2. Otherwise, if c is U+003A (:), then:
         else if (c == ':')
@@ -249,9 +248,9 @@ internal partial class InternalUrl
         // Otherwise, if state override is not given,
         else
         {
-            Buf.Clear();  // set buffer to the empty string
+            Buf.Clear(); // set buffer to the empty string
             State = InternalUrlParserState.NoScheme; // state to no scheme state
-            Pointer = -1;  // and start over (from the first code point in input).
+            Pointer = -1; // and start over (from the first code point in input).
         }
     }
 
@@ -273,7 +272,7 @@ internal partial class InternalUrl
             // (since base has an opaque path, setting it instead of the _path)
             _opaquePath = BaseUrl._opaquePath; // url’s path to base’s path,
 
-            Query = BaseUrl.Query;   // url’s query to base’s query,
+            Query = BaseUrl.Query; // url’s query to base’s query,
             Buf.EnsureCapacity(Length - Pointer); // url’s fragment to the empty string,
 
             State = InternalUrlParserState.Fragment; // and set state to fragment state.
@@ -282,7 +281,7 @@ internal partial class InternalUrl
 
         State = BaseUrl.Scheme != Schemes.File
             ? InternalUrlParserState.Relative // if base’s scheme is not "file", set state to relative state
-            : InternalUrlParserState.File;    // Otherwise, set state to file state
+            : InternalUrlParserState.File; // Otherwise, set state to file state
 
         Pointer--; // and decrease pointer by 1.
     }
@@ -437,7 +436,7 @@ internal partial class InternalUrl
                         continue;
                     }
 
-                    PercentEncoding.AppendEncoded(bufC, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSet);
+                    PercentEncoding.AppendEncoded(bufC, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSetLookup);
                 }
             }
 
@@ -456,7 +455,8 @@ internal partial class InternalUrl
                 if (!PasswordTokenSeen)
                 {
                     Username = AuthorityStringBuilder!.ToString();
-                } else
+                }
+                else
                 {
                     Password = AuthorityStringBuilder!.ToString();
                 }
@@ -666,6 +666,7 @@ internal partial class InternalUrl
                     Buf.Clear();
                     Pointer -= 2;
                 }
+
                 State = InternalUrlParserState.Path;
                 return;
             }
@@ -754,7 +755,8 @@ internal partial class InternalUrl
 
                 // If c is U+0025 (%) and remaining does not start with two ASCII hex digits, invalid-URL-unit validation error.
                 AppendCurrentEncodedInC0(c);
-            } else
+            }
+            else
             {
                 _opaquePath = Buf.ToString();
                 Buf.Clear();
@@ -818,7 +820,7 @@ internal partial class InternalUrl
         if (c == '%' && !char.IsAsciiHexDigit(NextChar(1)) && !char.IsAsciiHexDigit(NextChar(2)))
             Debug.WriteLine("invalid-URL-unit");
 
-        AppendCurrentEncoded(c, PercentEncoding.FragmentEncodeSet);
+        AppendCurrentEncoded(c, PercentEncoding.FragmentEncodeSetLookup);
     }
 
     // helper with bound guard
