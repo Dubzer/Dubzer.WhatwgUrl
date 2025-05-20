@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Frozen;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
 namespace Dubzer.WhatwgUrl;
 
-internal class InternalUrl
+internal partial class InternalUrl
 {
     internal string Scheme = "";
     internal string? Host;
@@ -39,7 +38,6 @@ internal class InternalUrl
     private bool _arrFlag;
 
     private string? _opaquePath;
-    private List<string> _path = [];
 
     public virtual Result<InternalUrl> Parse(string input, InternalUrl? baseUrl = null)
     {
@@ -324,8 +322,9 @@ internal class InternalUrl
             Password = BaseUrl.Password;
             Host = BaseUrl.Host;
             Port = BaseUrl.Port;
-            _path = [..BaseUrl._path];
+            Path = [..BaseUrl.Path];
             Query = BaseUrl.Query;
+            _firstPathSegmentWithSlash = BaseUrl._firstPathSegmentWithSlash;
 
             if (c == '?')
             {
@@ -580,7 +579,7 @@ internal class InternalUrl
         else if (BaseUrl is { Scheme: Schemes.File })
         {
             Host = BaseUrl.Host;
-            _path = [..BaseUrl._path];
+            Path = [..BaseUrl.Path];
             Query = BaseUrl.Query;
             if (c == '?')
             {
@@ -603,7 +602,7 @@ internal class InternalUrl
 
                     // 2. Set url’s path to « ».
                     // (I've verified with the JSDom implementation that Clear()ing is the correct behavior)
-                    _path.Clear();
+                    Path.Clear();
                 }
 
                 State = InternalUrlParserState.Path;
@@ -636,10 +635,10 @@ internal class InternalUrl
                 // If the code point substring from pointer to the end of input does not start with a Windows drive letter
                 if (!StartsWithAWindowsDriveLetter(Input.AsSpan()[Pointer..])
                     // and base’s path[0] is a normalized Windows drive letter,
-                    && IsNormalizedWindowDriveLetter(BaseUrl._path[0]))
+                    && IsNormalizedWindowDriveLetter(BaseUrl.Path[0]))
                 {
                     // then append base’s path[0] to url’s path.
-                    _path.Add(BaseUrl._path[0]);
+                    Path.Add(BaseUrl.Path[0]);
                 }
             }
 
@@ -658,6 +657,15 @@ internal class InternalUrl
             if (Buf.Length == 2 && char.IsAsciiLetter(Buf[0]) && Buf[1] is ':' or '|')
             {
                 Debug.WriteLine("file-invalid-Windows-drive-letter-host");
+
+                // This was not in spec,
+                // because in this implementation Path operates on the whole segment
+                // and doesn't use Buf made by other states
+                if (this is not InternalUrlRune)
+                {
+                    Buf.Clear();
+                    Pointer -= 2;
+                }
                 State = InternalUrlParserState.Path;
                 return;
             }
@@ -717,62 +725,6 @@ internal class InternalUrl
             State = InternalUrlParserState.Path;
             if (c != '/')
                 Pointer--;
-        }
-    }
-
-    // https://url.spec.whatwg.org/#path-state
-    private void PathState(char c)
-    {
-        if (Pointer == Length || c is '/' or '?' or '#' || (c == '\\' && IsSpecial))
-        {
-            if (IsSpecial && c == '\\')
-                Debug.WriteLine("invalid-reverse-solidus");
-
-            var str = Buf.ToString();
-            if (Util.IsDoubleDot(str))
-            {
-                ShortenPath();
-
-                if (c != '/' && !(c == '\\' && IsSpecial))
-                    _path.Add("");
-            }
-            else if (Util.IsSingleDot(str) && c != '/' && !(c == '\\' && IsSpecial))
-            {
-                _path.Add("");
-            }
-            else if (!Util.IsSingleDot(str))
-            {
-                if (Scheme == Schemes.File
-                    && _path.Count == 0
-                    && str.Length == 2
-                    && char.IsAsciiLetter(str[0])
-                    && str[1] is '|')
-                {
-                    str = $"{str[0]}:";
-                }
-
-                _path.Add(str);
-            }
-
-            Buf.Clear();
-            switch (c)
-            {
-                case '?':
-                    State = InternalUrlParserState.Query;
-                    break;
-                case '#':
-                    Buf.EnsureCapacity(Length - Pointer);
-                    State = InternalUrlParserState.Fragment;
-                    break;
-            }
-        }
-        else
-        {
-            // add parse error here
-            if (c == '%' && !char.IsAsciiHexDigit(NextChar(1)) && !char.IsAsciiHexDigit(NextChar(2)))
-                Debug.WriteLine("invalid-URL-unit");
-
-            AppendCurrentEncoded(c, PercentEncoding.PathEncodeSet);
         }
     }
 
@@ -875,18 +827,6 @@ internal class InternalUrl
             ? '\0'
             : Input[Pointer + n];
 
-    // https://url.spec.whatwg.org/#shorten-a-urls-path
-    protected void ShortenPath()
-    {
-        // If url’s scheme is "file", path’s size is 1, and path[0] is a normalized Windows drive letter, then return.
-        if (Scheme == Schemes.File && _path.Count == 1 && IsNormalizedWindowDriveLetter(_path[0]))
-            return;
-
-        // Remove path’s last item, if any.
-        if (_path.Count > 0)
-            _path.RemoveAt(_path.Count - 1);
-    }
-
     // https://url.spec.whatwg.org/#normalized-windows-drive-letter
     private static bool IsNormalizedWindowDriveLetter(string input) =>
         input.Length == 2 && char.IsAsciiLetter(input[0]) && input[1] == ':';
@@ -934,7 +874,7 @@ internal class InternalUrl
 
         // 3. If url’s host is null, url does not have an opaque path, url’s path’s size is greater than 1,
         // and url’s path[0] is the empty string
-        if (Host == null && _opaquePath == null && _path.Count > 1 && string.IsNullOrEmpty(_path[0]))
+        if (Host == null && _opaquePath == null && Path.Count > 1 && string.IsNullOrEmpty(Path[0]))
             sb.Append("/.");
 
         sb.Append(SerializePathname());
@@ -983,26 +923,9 @@ internal class InternalUrl
         return "null";
     }
 
-    // https://url.spec.whatwg.org/#url-path-serializer
-    internal string SerializePathname()
-    {
-        if (_opaquePath != null)
-            return _opaquePath;
-
-        var sb = new StringBuilder();
-        foreach (var segment in _path)
-        {
-            sb.Append('/');
-            sb.Append(segment);
-        }
-
-        return sb.ToString();
-    }
-
-    // since IsSpecial is called more often than mutated, it's better to cache the value
     private void UpdateScheme(string scheme)
     {
         Scheme = scheme;
-        IsSpecial = Schemes.Special.ContainsKey(Scheme);
+        IsSpecial = Schemes.Special.ContainsKey(scheme);
     }
 }

@@ -6,7 +6,7 @@ namespace Dubzer.WhatwgUrl.Benchmark;
 [MemoryDiagnoser]
 [SuppressMessage("Performance", "CA1822:Mark members as static",
     Justification = "BenchmarkDotNet requires non-static members")]
-internal class GenericBenchmark
+public class GenericBenchmark
 {
     [Benchmark]
     public DomUrl AllParts()

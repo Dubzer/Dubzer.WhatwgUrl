@@ -2,7 +2,12 @@
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using System.Text;
+using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
@@ -69,6 +74,175 @@ internal static class PercentEncoding
         Encode(input, sb);
     }
 
+    /// <returns>Handled - if true, doesn't require to fallback</returns>
+    public static bool AppendEncodedPath(ReadOnlySpan<char> input, ref ValueStringBuilder vsb)
+    {
+        // this offset allows to skip copying path to the vsb
+        // when there are no characters that need to be encoded
+        var asIsOffset = 0;
+
+        // -1 means that there are characters that need to be encoded,
+        // so we can't use that optimization
+        const int cannotUseAsIs = -1;
+
+        var vectorCount = Vector128<ushort>.Count;
+        var (iterations, rest) = Math.DivRem(input.Length, vectorCount);
+
+        for (var i = 0; i < iterations; i++)
+        {
+            var offset = i * vectorCount;
+
+            var slice = input.Slice(offset, vectorCount);
+            var vecX = Vector128.Create(MemoryMarshal.Cast<char, ushort>(slice));
+            var xFromY = Vector128<ushort>.Zero;
+
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'"'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'#'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'<'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'>'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'?'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'`'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'{'));
+            xFromY |= Vector128.Equals(vecX, Vector128.Create((ushort)'}'));
+
+            xFromY |= Vector128.LessThanOrEqual(vecX, Vector128.Create((ushort)0x20));
+            xFromY |= Vector128.GreaterThan(vecX, Vector128.Create((ushort)0x7E));
+
+            var backslash = Vector128.Equals(vecX, Vector128.Create((ushort)'\\')).ExtractMostSignificantBits();
+            var percent = Vector128.Equals(vecX, Vector128.Create((ushort)'%')).ExtractMostSignificantBits();
+
+            if (RequiresDotHandling(ref vecX, input, offset) || backslash != 0 || percent != 0)
+                return false;
+
+            var requiresEncoding = xFromY.ExtractMostSignificantBits();
+
+            // the mask will be 0x0000_0000
+            // which means no characters have passed the checks,
+            // and they don't need to be encoded
+            if (requiresEncoding == 0)
+            {
+                if (asIsOffset != cannotUseAsIs)
+                    asIsOffset += vectorCount;
+                else
+                    vsb.Append(slice);
+
+                continue;
+            }
+
+            // we can't use the input as is anymore because there are characters that need to be encoded
+            if (asIsOffset != cannotUseAsIs)
+            {
+                vsb.Append(input[..asIsOffset]);
+                asIsOffset = cannotUseAsIs;
+            }
+
+            for (var bit = 0; bit < Vector128<ushort>.Count; bit++)
+            {
+                var c = slice[bit];
+                if ((requiresEncoding & (1 << bit)) == 0)
+                {
+                    vsb.Append(c);
+                }
+                else
+                {
+                    AppendPercentChar(c, ref vsb);
+                }
+            }
+        }
+
+        var remaining = input[^rest..];
+        for (var i = 0; i < rest; i++)
+        {
+            if (RequiresDotHandling(input, Vector128<ushort>.Count * iterations + i) || remaining[i] is '\\' or '%')
+                return false;
+
+            var c = remaining[i];
+            if (!(c <= 0x1F || c > 0x7E) && !PathEncodeSet.Contains(c))
+            {
+                if (asIsOffset != cannotUseAsIs)
+                    asIsOffset++;
+                else
+                    vsb.Append(c);
+            }
+            else
+            {
+                if (asIsOffset != cannotUseAsIs)
+                {
+                    vsb.Append(input[..asIsOffset]);
+                    asIsOffset = cannotUseAsIs;
+                }
+
+                AppendPercentChar(c, ref vsb);
+            }
+        }
+
+        if (asIsOffset != cannotUseAsIs)
+            vsb.Append(input);
+
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    // TODO: maybe use readonly ref
+    private static bool RequiresDotHandling(ref Vector128<ushort> vec, ReadOnlySpan<char> input, int offset)
+    {
+        var requiresDotHandling = Vector128.Equals(vec, Vector128.Create((ushort)'.')).ExtractMostSignificantBits();
+        while (requiresDotHandling != 0)
+        {
+            var nextDotInVec = BitOperations.TrailingZeroCount(requiresDotHandling);
+            var nextDot = offset + nextDotInVec;
+
+            var requiresHandling = nextDot == 0 || nextDot == input.Length - 1
+                                   || input[nextDot + 1] is '/' or '.'
+                                   || input[nextDot - 1] is '/';
+
+            if (requiresHandling)
+                return true;
+
+            // Clear the processed bit and continue with the next one
+            requiresDotHandling &= ~(1U << nextDotInVec);
+        }
+
+        return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool RequiresDotHandling(ReadOnlySpan<char> input, int offset) =>
+        input[offset] == '.'
+        && (offset == 0 || offset == input.Length - 1
+                        || input[offset + 1] is '/' or '.'
+                        || input[offset - 1] is '/');
+
+    private static void AppendPercentChar(char c, StringBuilder sb)
+    {
+        Span<byte> buf = stackalloc byte[3];
+        var written = EncodeCharToUtf8(c, buf);
+
+        // a buffer to store hex representation of the current number
+        Span<char> hex = stackalloc char[2];
+        for (var w = 0; w < written; w++)
+        {
+            sb.Append('%');
+            Util.ByteFormatX2(buf[w], hex);
+            sb.Append(hex);
+        }
+    }
+
+    private static void AppendPercentChar(char c, ref ValueStringBuilder vsb)
+    {
+        Span<byte> buf = stackalloc byte[3];
+        var written = EncodeCharToUtf8(c, buf);
+
+        // a buffer to store hex representation of the current number
+        Span<char> hex = stackalloc char[2];
+        for (var w = 0; w < written; w++)
+        {
+            vsb.Append('%');
+            Util.ByteFormatX2(buf[w], hex);
+            vsb.Append(hex);
+        }
+    }
+
     internal static void AppendEncoded(Rune input, StringBuilder sb, FrozenSet<char> set)
     {
         var c = input.ToChar();
@@ -99,17 +273,7 @@ internal static class PercentEncoding
             return;
         }
 
-        Span<byte> buf = stackalloc byte[3];
-        var written = EncodeCharToUtf8(input, buf);
-
-        // a buffer to store hex representation of the current number
-        Span<char> hex = stackalloc char[2];
-        for (var i = 0; i < written; i++)
-        {
-            sb.Append('%');
-            Util.ByteFormatX2(buf[i], hex);
-            sb.Append(hex);
-        }
+        AppendPercentChar(input, sb);
     }
 
     // Inlined Rune.TryEncodeToUtf8
