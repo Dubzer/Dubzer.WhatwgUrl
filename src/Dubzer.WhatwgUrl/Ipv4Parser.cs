@@ -135,6 +135,12 @@ internal static class Ipv4Parser
             // MaxValue so IP would not be valid on the check later
             return long.MaxValue;
 
-        return ParseNumbers.StringToLong(input, numBase, ParseNumbers.IsTight);
+        var (parsed, error) = ParseNumbers.StringToLong(input, numBase, ParseNumbers.IsTight);
+        return error switch
+        {
+            null => parsed,
+            ParseNumbers.ParseNumberError.Overflow => long.MaxValue,
+            _ => -1
+        };
     }
 }

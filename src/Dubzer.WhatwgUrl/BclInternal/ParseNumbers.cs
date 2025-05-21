@@ -5,6 +5,7 @@ using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using static Dubzer.WhatwgUrl.BclInternal.ParseNumbers.ParseNumberError;
 
 namespace Dubzer.WhatwgUrl.BclInternal;
 
@@ -15,7 +16,13 @@ internal static class ParseNumbers
     private const int TreatAsUnsigned = 0x0200;
     internal const int IsTight = 0x1000;
 
-    public static long StringToLong(ReadOnlySpan<char> s, int radix, int flags)
+    public enum ParseNumberError : byte
+    {
+        Overflow,
+        Format,
+    }
+
+    public static (long, ParseNumberError?) StringToLong(ReadOnlySpan<char> s, int radix, int flags)
     {
         int i = 0;
         int r = radix;
@@ -29,7 +36,7 @@ internal static class ParseNumbers
                 throw new ArgumentException();
 
             if ((flags & TreatAsUnsigned) != 0)
-                throw new OverflowException();
+                return (-1, Overflow);
 
             sign = -1;
             i++;
@@ -49,32 +56,34 @@ internal static class ParseNumbers
         }
 
         int grabNumbersStart = i;
-        long result = GrabLongs(r, s, ref i, (flags & TreatAsUnsigned) != 0);
+        var (result, error) = GrabLongs(r, s, ref i, (flags & TreatAsUnsigned) != 0);
+        if (error != null)
+            return (-1, error);
 
         // Check if they passed us a string with no parsable digits.
         if (i == grabNumbersStart)
-            throw new FormatException();
+            return (-1, Format);
 
         if ((flags & IsTight) != 0)
         {
             // If we've got effluvia left at the end of the string, complain.
             if (i < length)
-                throw new FormatException();
+                return (-1, Format);
         }
 
         // Return the value properly signed.
         if ((ulong)result == 0x8000000000000000 && sign == 1 && r == 10 && ((flags & TreatAsUnsigned) == 0))
-            throw new OverflowException();
+            return (-1, Overflow);
 
         if (r == 10)
         {
             result *= sign;
         }
 
-        return result;
+        return (result, null);
     }
 
-    private static long GrabLongs(int radix, ReadOnlySpan<char> s, ref int i, bool isUnsigned)
+    private static (long, ParseNumberError?) GrabLongs(int radix, ReadOnlySpan<char> s, ref int i, bool isUnsigned)
     {
         ulong result = 0;
         ulong maxVal;
@@ -89,14 +98,14 @@ internal static class ParseNumbers
             {
                 // Check for overflows - this is sufficient & correct.
                 if (result > maxVal || ((long)result) < 0)
-                    throw new OverflowException();
+                    return (-1, Overflow);
 
                 result = result * (ulong)radix + (ulong)value;
                 i++;
             }
 
             if ((long)result < 0 && result != 0x8000000000000000)
-                throw new OverflowException();
+                return (-1, Overflow);
         }
         else
         {
@@ -115,19 +124,19 @@ internal static class ParseNumbers
             {
                 // Check for overflows - this is sufficient & correct.
                 if (result > maxVal)
-                    throw new OverflowException();
+                    return (-1, Overflow);
 
                 ulong temp = result * (ulong)radix + (ulong)value;
 
                 if (temp < result) // this means overflow as well
-                    throw new OverflowException();
+                    return (-1, Overflow);
 
                 result = temp;
                 i++;
             }
         }
 
-        return (long)result;
+        return ((long)result, null);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
