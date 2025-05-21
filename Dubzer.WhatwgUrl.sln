@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Files", "Solution 
 		Directory.Build.props = Directory.Build.props
 		Dubzer.WhatwgUrl.sln.DotSettings = Dubzer.WhatwgUrl.sln.DotSettings
 		README.md = README.md
+		docker-compose.fuzzing.yml = docker-compose.fuzzing.yml
+		fuzzing.Dockerfile = fuzzing.Dockerfile
 	EndProjectSection
 EndProject
 Global

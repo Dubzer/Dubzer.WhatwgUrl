@@ -1,0 +1,7 @@
+services:
+  fuzzing:
+    build:
+      context: .
+      dockerfile: fuzzing.Dockerfile
+    volumes:
+      - ./artifacts/Fuzzer:/app/Fuzzer/
