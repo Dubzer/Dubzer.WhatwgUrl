@@ -2,13 +2,13 @@
     <PropertyGroup>
         <NoWarn>$(NoWarn);CA1707;CA1822;CA1852;CA1812;CA1515</NoWarn>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net9.0</TargetFramework>
+        <IsTestingPlatformApplication>false</IsTestingPlatformApplication>
     </PropertyGroup>
 
     <ItemGroup Label="References">
         <ProjectReference Include="..\Dubzer.WhatwgUrl.Tests\Dubzer.WhatwgUrl.Tests.csproj" />
         <ProjectReference Include="..\Dubzer.WhatwgUrl\Dubzer.WhatwgUrl.csproj" />
-        <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+        <PackageReference Include="BenchmarkDotNet" Version="0.15.6" />
     </ItemGroup>
 
     <ItemGroup>

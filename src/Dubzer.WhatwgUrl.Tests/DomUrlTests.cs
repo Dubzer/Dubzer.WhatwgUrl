@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Dubzer.WhatwgUrl.Tests.Models;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Dubzer.WhatwgUrl.Tests;
 
