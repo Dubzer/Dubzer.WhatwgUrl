@@ -127,14 +127,6 @@ internal static class Ipv4Parser
         if (!valid)
             return -1;
 
-        // 20 is a result of running
-        // Convert.ToString(long.MaxValue, 8).Length - 1,
-        // which is the longest possible number with our bases
-        // this check prevents overflow exception in Convert.ToInt64
-        if (input.Length > 20)
-            // MaxValue so IP would not be valid on the check later
-            return long.MaxValue;
-
         var (parsed, error) = ParseNumbers.StringToLong(input, numBase, ParseNumbers.IsTight);
         return error switch
         {
