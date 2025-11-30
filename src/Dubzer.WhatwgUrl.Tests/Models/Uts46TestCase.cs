@@ -1,4 +1,4 @@
-﻿using Xunit.Abstractions;
+﻿using Xunit.Sdk;
 
 namespace Dubzer.WhatwgUrl.Tests.Models;
 

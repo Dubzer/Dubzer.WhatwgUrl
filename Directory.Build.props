@@ -1,9 +1,10 @@
+<!--suppress MsbuildTargetFrameworkTagInspection -->
 <Project>
     <PropertyGroup>
         <AnalysisMode>AllEnabledByDefault</AnalysisMode>
         <IsPackable>false</IsPackable>
         <Nullable>enable</Nullable>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFrameworks>net10.0</TargetFrameworks>
         <UseArtifactsOutput>true</UseArtifactsOutput>
     </PropertyGroup>
 </Project>
