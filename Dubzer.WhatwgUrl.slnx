@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Solution Files/">
+    <File Path="Directory.Build.props" />
+    <File Path="docker-compose.fuzzing.yml" />
+    <File Path="Dubzer.WhatwgUrl.sln.DotSettings" />
+    <File Path="fuzzing.Dockerfile" />
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="src/Dubzer.WhatwgUrl.Benchmark/Dubzer.WhatwgUrl.Benchmark.csproj" />
+  <Project Path="src/Dubzer.WhatwgUrl.Codegen/Dubzer.WhatwgUrl.Codegen.csproj" />
+  <Project Path="src/Dubzer.WhatwgUrl.Fuzzing/Dubzer.WhatwgUrl.Fuzzing.csproj" />
+  <Project Path="src/Dubzer.WhatwgUrl.Tests/Dubzer.WhatwgUrl.Tests.csproj" />
+  <Project Path="src/Dubzer.WhatwgUrl/Dubzer.WhatwgUrl.csproj" />
+</Solution>
