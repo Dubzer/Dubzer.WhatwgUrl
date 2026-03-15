@@ -745,6 +745,19 @@ internal partial class InternalUrl
             Buf.EnsureCapacity(Length - Pointer);
             State = InternalUrlParserState.Fragment;
         }
+        else if (c == ' ')
+        {
+            // If remaining starts with U+003F (?) or U+003F (#), then append "%20" to url’s path.
+            if (NextChar(1) is '?' or '#')
+            {
+                Buf.Append("%20");
+            }
+            // Otherwise, append U+0020 SPACE to url’s path.
+            else
+            {
+                Buf.Append(' ');
+            }
+        }
         else
         {
             if (Pointer < Length)
