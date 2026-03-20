@@ -1,5 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
         <OutputType>Exe</OutputType>
+        <NoWarn>CA1305,CA1307</NoWarn>
     </PropertyGroup>
 </Project>

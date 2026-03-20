@@ -29,7 +29,7 @@ internal static class Idna
                     return null;
 
                 var decodedLabel = Punycode.Decode(span[4..]);
-                if (decodedLabel is null)
+                if (decodedLabel is null || Ascii.IsValid(decodedLabel))
                     return null;
 
                 labels[i] = decodedLabel;
@@ -201,9 +201,8 @@ internal static class Idna
         // CheckHyphens is always false in our case, so we skip 2 and 3
 
         // 4. If not CheckHyphens, the label must not begin with “xn--”.
-        // TODO: https://github.com/whatwg/url/issues/803
-        /* if (label.StartsWith("xn--"))
-            return false; */
+        if (label.StartsWith("xn--", StringComparison.Ordinal))
+            return false;
 
         // Skipping this step since we split by '.' before
         // 5. The label must not contain a U+002E ( . ) FULL STOP.
@@ -273,7 +272,7 @@ internal static class Idna
                 var found = false;
                 foreach (var c in label[..index])
                 {
-                    if (UnicodeTables.LChar == c.Value || UnicodeTables.DSet.Contains(c.Value))
+                    if (UnicodeTables.LSet.Contains(c.Value) || UnicodeTables.DSet.Contains(c.Value))
                     {
                         found = true;
                         break;

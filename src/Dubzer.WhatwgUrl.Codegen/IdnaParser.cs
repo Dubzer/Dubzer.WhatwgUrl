@@ -60,8 +60,6 @@ internal static class IdnaParser
         "mapped" => IdnaStatus.Mapped,
         "deviation" => IdnaStatus.Deviation,
         "disallowed" => IdnaStatus.Disallowed,
-        "disallowed_STD3_valid" => IdnaStatus.Valid,
-        "disallowed_STD3_mapped" => IdnaStatus.Mapped,
         _ => throw new ArgumentOutOfRangeException(nameof(input))
     };
 }
