@@ -1,8 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using Argon;
 using BenchmarkDotNet.Attributes;
 using Dubzer.WhatwgUrl.Tests.Models;
 using Dubzer.WhatwgUrl.Uts46;
@@ -32,19 +32,16 @@ public class IdnaBenchmarks
 		{
 			case TestSet.FullIdnaTestV2 or TestSet.ValidOnlyIdnaTestV2:
 			{
-				var serializerOptions = new JsonSerializerOptions {PropertyNameCaseInsensitive = true};
 				var file = File.ReadAllText("Resources/IdnaTestV2.json");
 				var nodes = JsonNode.Parse(file)!.AsArray();
-				var temp = nodes
-					.Where(x => x!.GetValueKind() != JsonValueKind.String)
-					.Select(x => x.Deserialize<Uts46TestCase>(serializerOptions)!);
+				var temp = JArray.Parse(file)
+					.Where(x => x.Type == JTokenType.Object)
+					.Select(x => x.ToObject<Uts46TestCase>()!);
 
 				if (DataSet == TestSet.ValidOnlyIdnaTestV2)
-				{
 					temp = temp.Where(x => x.Output != null);
-				}
 
-				_data = temp.Select(x => x.Input).ToArray();
+				_data = [.. temp.Select(x => x.Input)];
 
 				break;
 			}
