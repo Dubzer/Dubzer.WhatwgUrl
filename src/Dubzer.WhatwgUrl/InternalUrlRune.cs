@@ -169,6 +169,41 @@ internal sealed class InternalUrlRune : InternalUrl
         }
     }
 
+    // https://url.spec.whatwg.org/#query-state
+    protected override void QueryState(char c)
+    {
+        // skipping this since we don't support other encodings
+        // 1. If encoding is not UTF-8 and one of the following is true: ...
+
+        // 2. If one of the following is true:
+        // state override is not given and c is U+0023 (#)
+        // c is the EOF code point
+        if (c == '#' || Pointer >= Length)
+        {
+            var inputToEncode = Buf.ToString();
+            Buf.Clear();
+
+            if (IsSpecial)
+                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InSpecialQueryEncodeSet, Buf);
+            else
+                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InQueryEncodeSet, Buf);
+
+            Query = Buf.ToString();
+            Buf.Clear();
+
+            // If c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
+            if (c == '#')
+            {
+                Buf.EnsureCapacity(Length - Pointer);
+                State = InternalUrlParserState.Fragment;
+            }
+        }
+        else
+        {
+            AppendCurrent(c);
+        }
+    }
+
     // helper with bound guard
     protected override char NextChar(int n) =>
         Pointer + n >= Length

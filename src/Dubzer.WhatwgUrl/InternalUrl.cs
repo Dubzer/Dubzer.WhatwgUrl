@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
@@ -778,44 +779,40 @@ internal partial class InternalUrl
     }
 
     // https://url.spec.whatwg.org/#query-state
-    private void QueryState(char c)
+    protected virtual void QueryState(char c)
     {
         // skipping this since we don't support other encodings
         // 1. If encoding is not UTF-8 and one of the following is true: ...
 
-        // 2. If one of the following is true:
-        // state override is not given and c is U+0023 (#)
-        // c is the EOF code point
-        if (c == '#' || Pointer >= Length)
+        // unwrapped state machine + fast encoding
+
+        var inputRemainder = Input.AsSpan()[Pointer..];
+        
+        var end = inputRemainder.IndexOf('#');
+
+        var endsWithFragment = end != -1;
+        if (endsWithFragment)
+            inputRemainder = inputRemainder[..end];
+
+        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
+        try
         {
-            var inputToEncode = Buf.ToString();
-            Buf.Clear();
+            var set = IsSpecial ? PercentEncoding.SpecialQueryEncodeSet : PercentEncoding.QueryEncodeSet;
+            PercentEncoding.AppendEncodedQuery(inputRemainder, ref vsb, set);
 
-            if (IsSpecial)
-                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InSpecialQueryEncodeSet, Buf);
-            else
-                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InQueryEncodeSet, Buf);
-
-            Query = Buf.ToString();
-            Buf.Clear();
-
-            // If c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
-            if (c == '#')
+            Pointer += inputRemainder.Length;
+            if (endsWithFragment)
             {
                 Buf.EnsureCapacity(Length - Pointer);
                 State = InternalUrlParserState.Fragment;
             }
+
+            Query = vsb.ToString();
+            Buf.Clear();
         }
-        else
+        finally
         {
-            // TODO: If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
-
-            // If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
-            // invalid-URL-unit validation error.
-            if (c == '%' && !char.IsAsciiHexDigit(NextChar(1)) && !char.IsAsciiHexDigit(NextChar(2)))
-                Debug.WriteLine("invalid-URL-unit");
-
-            AppendCurrent(c);
+            vsb.Dispose();
         }
     }
 
