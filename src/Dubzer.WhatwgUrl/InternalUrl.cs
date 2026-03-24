@@ -155,7 +155,7 @@ internal partial class InternalUrl
 
                 break;
             case InternalUrlParserState.Query:
-                QueryState();
+                QueryState(c);
 
                 break;
             case InternalUrlParserState.Fragment:
@@ -779,7 +779,7 @@ internal partial class InternalUrl
     }
 
     // https://url.spec.whatwg.org/#query-state
-    private void QueryState()
+    protected virtual void QueryState(char c)
     {
         // skipping this since we don't support other encodings
         // 1. If encoding is not UTF-8 and one of the following is true: ...
