@@ -204,6 +204,19 @@ internal sealed class InternalUrlRune : InternalUrl
         }
     }
 
+    // https://url.spec.whatwg.org/#fragment-state
+    protected override void FragmentState(char c)
+    {
+        if (Pointer == Length)
+        {
+            Fragment = Buf.ToString();
+            Buf.Clear();
+            return;
+        }
+
+        AppendCurrentEncoded(c, PercentEncoding.FragmentEncodeSetLookup);
+    }
+
     // helper with bound guard
     protected override char NextChar(int n) =>
         Pointer + n >= Length

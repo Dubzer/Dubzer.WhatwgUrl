@@ -798,7 +798,7 @@ internal partial class InternalUrl
         try
         {
             var set = IsSpecial ? PercentEncoding.SpecialQueryEncodeSet : PercentEncoding.QueryEncodeSet;
-            PercentEncoding.AppendEncodedQuery(inputRemainder, ref vsb, set);
+            PercentEncoding.AppendEncodedSimple(inputRemainder, ref vsb, set);
 
             Pointer += inputRemainder.Length;
             if (endsWithFragment)
@@ -817,20 +817,25 @@ internal partial class InternalUrl
     }
 
     // https://url.spec.whatwg.org/#fragment-state
-    private void FragmentState(char c)
+    protected virtual void FragmentState(char c)
     {
-        if (Pointer == Length)
+        // unwrapped state machine + fast encoding
+
+        var inputRemainder = Input.AsSpan()[Pointer..];
+
+        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
+        try
         {
-            Fragment = Buf.ToString();
+            PercentEncoding.AppendEncodedSimple(inputRemainder, ref vsb,  PercentEncoding.FragmentEncodeSet);
+
+            Pointer += inputRemainder.Length;
+            Fragment = vsb.ToString();
             Buf.Clear();
-            return;
         }
-
-        // TODO: If c is not a URL code point and not "%", parse error.
-        if (c == '%' && !char.IsAsciiHexDigit(NextChar(1)) && !char.IsAsciiHexDigit(NextChar(2)))
-            Debug.WriteLine("invalid-URL-unit");
-
-        AppendCurrentEncoded(c, PercentEncoding.FragmentEncodeSetLookup);
+        finally
+        {
+            vsb.Dispose();
+        }
     }
 
     // helper with bound guard
