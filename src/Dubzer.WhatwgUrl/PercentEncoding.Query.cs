@@ -1,6 +1,5 @@
 using System;
 using System.Buffers;
-using System.Diagnostics;
 using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
@@ -9,80 +8,50 @@ internal static partial class PercentEncoding
 {
     // https://url.spec.whatwg.org/#query-percent-encode-set
     public static readonly SearchValues<char> QueryEncodeSet = SearchValues.Create([
-        '\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07', '\x08', '\x09', '\x0A', '\x0B', '\x0C', '\x0D', '\x0E', '\x0F',
-        '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17', '\x18', '\x19', '\x1A', '\x1B', '\x1C', '\x1D', '\x1E', '\x1F',
-        ' ', '"', '#', '<', '>'
+        '!', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '=', '?', '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '[', '\\', ']', '^', '_', '`', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~'
     ]);
 
     // https://url.spec.whatwg.org/#special-query-percent-encode-set
     public static readonly SearchValues<char> SpecialQueryEncodeSet = SearchValues.Create([
-        '\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07', '\x08', '\x09', '\x0A', '\x0B', '\x0C', '\x0D', '\x0E', '\x0F',
-        '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17', '\x18', '\x19', '\x1A', '\x1B', '\x1C', '\x1D', '\x1E', '\x1F',
-        ' ', '"', '#', '<', '>', '\'' 
+        '!', '$', '%', '&', '(', ')', '*', '+', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '=', '?', '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '[', '\\', ']', '^', '_', '`', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~'
     ]);
 
     // <returns>Handled - if true, doesn't require to fallback</returns>
     public static bool AppendEncodedQuery(ReadOnlySpan<char> input, ref ValueStringBuilder vsb, SearchValues<char> set)
     {
-        if (input.IsEmpty) return true;
-        var processing = input;
-
-        while (!processing.IsEmpty)
+        while (!input.IsEmpty)
         {
-            var highC0Index = processing.IndexOfAnyInRange('\x7F', char.MaxValue);
-            var requireEncodeIndex = processing.IndexOfAny(set);
+            // 1. Find the next character that NEEDS encoding (anything outside the safe set)
+            int encodeIndex = input.IndexOfAnyExcept(set);
 
-            var requireEncodeUnifiedIndex = MakeUnifiedIndex(highC0Index, requireEncodeIndex);
-
-            switch (requireEncodeUnifiedIndex)
+            if (encodeIndex == -1)
             {
-                case -1: // No characters to encode
-                    vsb.Append(processing);
-                    return true;
-
-                case 0: // Missing fragment that DOES NOT require character encoding
-                    var notRequireEncodeIndex = MakeInvertedUnifiedIndex(processing.IndexOfAnyExcept(set), processing.IndexOfAnyExceptInRange('\x7F', char.MaxValue));
-
-                    switch (notRequireEncodeIndex)
-                    {
-                        case -1: // The entire string up to the end needs to be encoded
-                            foreach (ref readonly var c in processing)
-                                EncodeToUtf8HexWithPercent(c, ref vsb);
-                            return true;
-                        default: // The string partially requires character encoding
-                            Debug.Assert(notRequireEncodeIndex != 0);
-
-                            foreach (ref readonly var c in processing[..notRequireEncodeIndex])
-                                EncodeToUtf8HexWithPercent(c, ref vsb);
-
-                            processing = processing[notRequireEncodeIndex..];
-                            continue;
-                    }
-
-                default: // Has a part that can be copied without further processing
-                    vsb.Append(processing[..requireEncodeUnifiedIndex]);
-                    processing = processing[requireEncodeUnifiedIndex..];
-                    goto case 0;
+                // No more encoding needed, append the rest and bail out
+                vsb.Append(input);
+                break;
             }
+
+            // 2. Append the safe segment (if any)
+            if (encodeIndex > 0)
+            {
+                vsb.Append(input[..encodeIndex]);
+                input = input[encodeIndex..];
+            }
+
+            // 3. Find where the unsafe block ends
+            int safeIndex = input.IndexOfAny(set);
+            if (safeIndex == -1) safeIndex = input.Length;
+
+            // 4. Fast, char-by-char encoding
+            // Note: Dropped 'ref readonly var' to avoid unnecessary pointer dereferencing overhead for a 2-byte struct
+            foreach (char c in input[..safeIndex])
+            {
+                EncodeToUtf8HexWithPercent(c, ref vsb);
+            }
+
+            input = input[safeIndex..];
         }
 
         return true;
-        
-
-        static int MakeUnifiedIndex(int firstSetIndex, int secondSetIndex)
-        {
-            if (firstSetIndex == -1)
-                return secondSetIndex;
-
-            if (secondSetIndex == -1)
-                return firstSetIndex;
-
-            return Math.Min(firstSetIndex, secondSetIndex);
-        }
-
-        static int MakeInvertedUnifiedIndex(int firstSetIndex, int secondSetIndex) =>
-            firstSetIndex == -1 || secondSetIndex == -1
-                ? -1
-                : Math.Max(firstSetIndex, secondSetIndex);
     }
 }
