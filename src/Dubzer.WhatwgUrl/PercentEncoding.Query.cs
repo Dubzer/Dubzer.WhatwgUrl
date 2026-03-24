@@ -41,16 +41,16 @@ internal static partial class PercentEncoding
                 input = input[encodeIndex..];
             }
 
-            EncodeToUtf8HexWithPercent(input[0], ref vsb);
-            input = input[1..];
+            int safeIndex = input.IndexOfAny(set);
+            if (safeIndex == -1)
+                safeIndex = input.Length;
 
-            // usually there are 1-2 unsafe characters,
-            // so use a simple loop instead of IndexOfAny to avoid setup overhead
-            while (!input.IsEmpty && !set.Contains(input[0]))
+            foreach (char c in input[..safeIndex])
             {
-                EncodeToUtf8HexWithPercent(input[0], ref vsb);
-                input = input[1..];
+                EncodeToUtf8HexWithPercent(c, ref vsb);
             }
+
+            input = input[safeIndex..];
         }
     }
 }
