@@ -4,6 +4,7 @@ using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
+// a fast implementation for parts that do not require fallback logic
 internal static partial class PercentEncoding
 {
     // Inverted https://url.spec.whatwg.org/#query-percent-encode-set
@@ -23,7 +24,15 @@ internal static partial class PercentEncoding
         '~'
     ]);
 
-    public static void AppendEncodedQuery(ReadOnlySpan<char> input, ref ValueStringBuilder vsb, SearchValues<char> set)
+    // Inverted https://url.spec.whatwg.org/#fragment-percent-encode-set
+    public static readonly SearchValues<char> FragmentEncodeSet = SearchValues.Create([
+        '!', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+        ':', ';', '=', '?', '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
+        'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '[', '\\', ']', '^', '_', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+        'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~'
+    ]);
+
+    public static void AppendEncodedSimple(ReadOnlySpan<char> input, ref ValueStringBuilder vsb, SearchValues<char> set)
     {
         while (!input.IsEmpty)
         {
