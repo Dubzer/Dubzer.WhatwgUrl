@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
@@ -780,13 +781,43 @@ internal partial class InternalUrl
     // https://url.spec.whatwg.org/#query-state
     private void QueryState(char c)
     {
+        var inputRemainder = Input.AsSpan()[Pointer..];
+        
+        var end = inputRemainder.IndexOf('#');
+
+        var endsWithFragment = end != -1;
+        if (endsWithFragment)
+            inputRemainder = inputRemainder[..end];
+
+        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
+        try
+        {
+            var set = IsSpecial ? PercentEncoding.SpecialQueryEncodeSet : PercentEncoding.QueryEncodeSet;
+            PercentEncoding.AppendEncodedQuery(inputRemainder, ref vsb, set);
+
+            Pointer += endsWithFragment ? end : inputRemainder.Length;
+            if (endsWithFragment)
+            {
+                Buf.EnsureCapacity(Length - Pointer);
+                State = InternalUrlParserState.Fragment;
+            }
+
+            Query = vsb.ToString();
+            Buf.Clear();
+        }
+        finally
+        {
+            vsb.Dispose();
+        }
+
+
         // skipping this since we don't support other encodings
         // 1. If encoding is not UTF-8 and one of the following is true: ...
 
         // 2. If one of the following is true:
         // state override is not given and c is U+0023 (#)
         // c is the EOF code point
-        if (c == '#' || Pointer >= Length)
+        /*if (c == '#' || Pointer >= Length)
         {
             var inputToEncode = Buf.ToString();
             Buf.Clear();
@@ -816,7 +847,7 @@ internal partial class InternalUrl
                 Debug.WriteLine("invalid-URL-unit");
 
             AppendCurrent(c);
-        }
+        }*/
     }
 
     // https://url.spec.whatwg.org/#fragment-state

@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Encodings.Web;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Argon;
 using Dubzer.WhatwgUrl.Tests.Models;
 using Dubzer.WhatwgUrl.Uts46;
@@ -42,7 +38,6 @@ public class IdnaTests
         return JArray.Parse(file)
             .Where(x => x.Type == JTokenType.Object)
             .Select(x => x.ToObject<Uts46TestCase>())
-            .Where(x => !x!.Input.Contains('?', StringComparison.InvariantCulture))
             .Select(static x => new object[] { x! });
 
     }
