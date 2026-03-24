@@ -23,6 +23,25 @@ internal static class HostParser
     // https://url.spec.whatwg.org/#ends-in-a-number-checker
     private static bool EndsInANumber(ReadOnlySpan<char> input)
     {
+        if (input.Length == 0)
+            return false;
+
+        // fast path skip
+        var end = input.Length;
+        if (input[^1] == '.')
+        {
+            // there's nothing besides that dot
+            if (input.Length == 1)
+                return false;
+
+            end--;
+        }
+
+        var lastChar = input[end - 1];
+
+        if (!char.IsAsciiHexDigit(lastChar) && lastChar is not ('x' or 'X'))
+            return false;
+
         // 1. Let parts be the result of strictly splitting input on U+002E (.).
         var lastPartOffset = input.LastIndexOf('.');
 
