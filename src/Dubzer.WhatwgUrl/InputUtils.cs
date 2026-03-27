@@ -30,7 +30,7 @@ internal static class InputUtils
 
         if (controlCharStart == 0)
         {
-            // we have trailing control chars
+            // we have leading control chars
             var start = inputSpan.IndexOfAnyExceptInRange('\x00', '\x20');
             if (start == -1)
                 return "";
@@ -38,7 +38,7 @@ internal static class InputUtils
             inputSpan = inputSpan[start..];
         }
 
-        // we may also have leading control chars
+        // we may also have trailing control chars
         var end = inputSpan.LastIndexOfAnyExceptInRange('\x00', '\x20');
         if (end == -1)
             return "";
