@@ -92,27 +92,25 @@ internal partial class InternalUrl
             return;
         }
 
-        var inputRemainder = Input.AsSpan()[Pointer..];
-
-        if (inputRemainder.Length == 0)
+        if (Remainder.Length == 0)
         {
             Path.Add("/");
             _firstPathSegmentWithSlash = true;
             return;
         }
 
-        var lastInPath = inputRemainder.IndexOfAny(LastInPathSearchValues);
+        var lastInPath = Remainder.IndexOfAny(LastInPathSearchValues);
         var endsWithChar = '\u0000';
         ReadOnlySpan<char> path;
         if (lastInPath == -1)
         {
-            lastInPath = inputRemainder.Length;
-            path = inputRemainder;
+            lastInPath = Remainder.Length;
+            path = Remainder;
         }
         else
         {
-            path = inputRemainder[..lastInPath];
-            endsWithChar = inputRemainder[lastInPath];
+            path = Remainder[..lastInPath];
+            endsWithChar = Remainder[lastInPath];
         }
 
         var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);

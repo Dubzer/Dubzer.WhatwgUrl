@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
@@ -13,24 +14,19 @@ internal partial class InternalUrl
     internal int? Port;
     internal string? Query;
     internal string? Fragment;
-    internal string Username = "";
-    internal string Password = "";
 
     protected UrlErrorCode? Error;
 
     protected int Pointer;
     protected InternalUrlParserState State = InternalUrlParserState.SchemeStart;
     protected StringBuilder Buf = null!;
-    protected StringBuilder? AuthorityStringBuilder;
     protected string Input = "";
+    private ReadOnlySpan<char> Remainder => Input.AsSpan()[Pointer..];
     protected int Length;
 
     protected bool IsSpecial;
 
     protected InternalUrl? BaseUrl;
-
-    protected bool AtSignSeen;
-    protected bool PasswordTokenSeen;
 
     /// <summary>
     /// Pointer is inside an array (ipv6)
@@ -413,68 +409,6 @@ internal partial class InternalUrl
         }
     }
 
-    // https://url.spec.whatwg.org/#authority-state
-    protected virtual void AuthorityState(char c)
-    {
-        if (c == '@')
-        {
-            Debug.WriteLine("invalid-credentials");
-            if (AtSignSeen)
-                Buf.Insert(0, "%40");
-            else
-                AtSignSeen = true;
-
-            AuthorityStringBuilder ??= new StringBuilder();
-            foreach (var chunk in Buf.GetChunks())
-            {
-                foreach (var bufC in chunk.Span)
-                {
-                    if (bufC == ':' && !PasswordTokenSeen)
-                    {
-                        Username = AuthorityStringBuilder.ToString();
-                        AuthorityStringBuilder.Clear();
-                        PasswordTokenSeen = true;
-                        continue;
-                    }
-
-                    PercentEncoding.AppendEncoded(bufC, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSetLookup);
-                }
-            }
-
-            Buf.Clear();
-        }
-        else if (c is '/' or '?' or '#' || (IsSpecial && c == '\\') || Pointer == Length)
-        {
-            if (AtSignSeen && Buf.Length == 0)
-            {
-                Error = UrlErrorCode.HostMissing;
-                return;
-            }
-
-            if (AuthorityStringBuilder != null)
-            {
-                if (!PasswordTokenSeen)
-                {
-                    Username = AuthorityStringBuilder!.ToString();
-                }
-                else
-                {
-                    Password = AuthorityStringBuilder!.ToString();
-                }
-
-                AuthorityStringBuilder.Clear();
-            }
-
-            Pointer -= Buf.Length + 1;
-            Buf.Clear();
-            State = InternalUrlParserState.Host;
-        }
-        else
-        {
-            AppendCurrent(c);
-        }
-    }
-
     // https://url.spec.whatwg.org/#host-state
     private void HostState(char c)
     {
@@ -595,7 +529,7 @@ internal partial class InternalUrl
             {
                 Query = null;
                 // If the code point substring from pointer to the end of input does not start with a Windows drive letter
-                if (!StartsWithAWindowsDriveLetter(Input.AsSpan()[Pointer..]))
+                if (!StartsWithAWindowsDriveLetter(Remainder))
                     ShortenPath();
                 else
                 {
@@ -634,7 +568,7 @@ internal partial class InternalUrl
                 Host = BaseUrl.Host;
 
                 // If the code point substring from pointer to the end of input does not start with a Windows drive letter
-                if (!StartsWithAWindowsDriveLetter(Input.AsSpan()[Pointer..])
+                if (!StartsWithAWindowsDriveLetter(Remainder)
                     // and base’s path[0] is a normalized Windows drive letter,
                     && IsNormalizedWindowDriveLetter(BaseUrl.Path[0]))
                 {
@@ -786,21 +720,20 @@ internal partial class InternalUrl
 
         // unwrapped state machine + fast encoding
 
-        var inputRemainder = Input.AsSpan()[Pointer..];
-        
-        var end = inputRemainder.IndexOf('#');
+        var query = Remainder;
 
+        var end = query.IndexOf('#');
         var endsWithFragment = end != -1;
         if (endsWithFragment)
-            inputRemainder = inputRemainder[..end];
+            query = query[..end];
 
         var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
         try
         {
             var set = IsSpecial ? PercentEncoding.SpecialQueryEncodeSet : PercentEncoding.QueryEncodeSet;
-            PercentEncoding.AppendEncodedSimple(inputRemainder, ref vsb, set);
+            PercentEncoding.AppendEncodedSimple(query, ref vsb, set);
 
-            Pointer += inputRemainder.Length;
+            Pointer += query.Length;
             if (endsWithFragment)
             {
                 Buf.EnsureCapacity(Length - Pointer);
@@ -821,14 +754,13 @@ internal partial class InternalUrl
     {
         // unwrapped state machine + fast encoding
 
-        var inputRemainder = Input.AsSpan()[Pointer..];
-
+        var fragment = Remainder;
         var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
         try
         {
-            PercentEncoding.AppendEncodedSimple(inputRemainder, ref vsb,  PercentEncoding.FragmentEncodeSet);
+            PercentEncoding.AppendEncodedSimple(fragment, ref vsb,  PercentEncoding.FragmentEncodeSet);
 
-            Pointer += inputRemainder.Length;
+            Pointer += fragment.Length;
             Fragment = vsb.ToString();
             Buf.Clear();
         }
