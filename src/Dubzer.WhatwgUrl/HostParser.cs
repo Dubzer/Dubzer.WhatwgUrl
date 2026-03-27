@@ -75,7 +75,11 @@ internal static class HostParser
     }
 
     // characters that are not allowed for executing fast path
+#if NET8_0
     private static readonly SearchValues<char> FastPathInvalid = SearchValues.Create("-%");
+#else
+    private static readonly SearchValues<string> FastPathInvalid = SearchValues.Create(["%", "--"], StringComparison.Ordinal);
+#endif
 
     // https://url.spec.whatwg.org/#host-parsing
     public static Result<string> Parse(string input, bool isOpaque)
@@ -101,13 +105,16 @@ internal static class HostParser
         var span = input.AsSpan();
 
         var asciiFastPath = false;
-
         // additional validation for fast path
         // TODO: SearchValues<ReadOnlySpan<char>> can be used when .NET 9 is targeted
         if (input.Length < Consts.MaxLengthOnStack.Char
             && RuntimeHelpers.TryEnsureSufficientExecutionStack()
             && Ascii.IsValid(input))
         {
+#if NET9_0_OR_GREATER
+            asciiFastPath = !span.ContainsAny(FastPathInvalid);
+#else
+
             var currentIndex = 0;
             while (true)
             {
@@ -127,8 +134,8 @@ internal static class HostParser
 
                 currentIndex += index + 1;
             }
+#endif
         }
-
         scoped ReadOnlySpan<char> asciiDomainSpan;
         if (asciiFastPath)
         {
