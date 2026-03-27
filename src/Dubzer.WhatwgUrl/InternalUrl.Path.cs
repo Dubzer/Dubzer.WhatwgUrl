@@ -120,18 +120,25 @@ internal partial class InternalUrl
 
             var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
 
-            if (!handled)
+            switch (handled)
             {
-                // fallback to slow path
-                Pointer--;
-
-                return;
+                case PercentEncoding.AppendEncodedPathResult.Handled:
+                    Path.Add(vsb.ToString());
+                    break;
+                case PercentEncoding.AppendEncodedPathResult.NoProcessing:
+                    Path.Add(string.Concat("/", path));
+                    break;
+                case PercentEncoding.AppendEncodedPathResult.Fallback:
+                    Pointer--;
+                    return;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
 
-            Path.Add(vsb.Length == 0 ? path.ToString() : vsb.ToString());
-            _firstPathSegmentWithSlash = true;
 
+            _firstPathSegmentWithSlash = true;
             Pointer += lastInPath;
+
             switch (endsWithChar)
             {
                 case '?':

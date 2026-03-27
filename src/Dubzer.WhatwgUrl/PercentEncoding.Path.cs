@@ -7,6 +7,16 @@ namespace Dubzer.WhatwgUrl;
 
 internal static partial class PercentEncoding
 {
+    public enum AppendEncodedPathResult : byte
+    {
+        // vsb contains a valid result
+        Handled,
+        // the input does not require processing and can be used as is
+        NoProcessing,
+        // the input requires a slow path
+        Fallback
+    }
+
     // https://url.spec.whatwg.org/#path-percent-encode-set
     // ' ', '"', '#', '<', '>', '?', '^', '`', '{', '}' + C0
     internal static ReadOnlySpan<byte> PathEncodeSetLookup =>
@@ -37,13 +47,14 @@ internal static partial class PercentEncoding
     ]);
 
 
-    // <returns>Handled - if true, doesn't require to fallback</returns>
-    public static bool AppendEncodedPath(ReadOnlySpan<char> input, ref ValueStringBuilder vsb)
+    public static AppendEncodedPathResult AppendEncodedPath(ReadOnlySpan<char> input, ref ValueStringBuilder vsb)
     {
-        if (input.IsEmpty) return true;
-        if (RequiresDotHandling(input)) return false;
+        if (input.IsEmpty) return AppendEncodedPathResult.Handled;
+        if (RequiresDotHandling(input)) return AppendEncodedPathResult.Fallback;
 
         var processing = input;
+        // the input does not require processing and can be used as is
+        var noProcessing = true;
 
         while (!processing.IsEmpty)
         {
@@ -51,11 +62,15 @@ internal static partial class PercentEncoding
             var requireEncodeIndex = processing.IndexOfAny(PathEncodeSet);
 
             var requireEncodeUnifiedIndex = MakeUnifiedIndex(highC0Index, requireEncodeIndex);
+            if (noProcessing && requireEncodeUnifiedIndex == -1)
+                return AppendEncodedPathResult.NoProcessing;
+
+            noProcessing = false;
             switch (requireEncodeUnifiedIndex)
             {
                 case -1: // No characters to encode
                     vsb.Append(processing);
-                    return true;
+                    return AppendEncodedPathResult.Handled;
 
                 case 0: // Missing fragment that DOES NOT require character encoding
                     var notRequireEncodeIndex = processing.IndexOfAnyExcept(PathEncodeSet);
@@ -68,7 +83,7 @@ internal static partial class PercentEncoding
                         case -1: // The entire string up to the end needs to be encoded
                             foreach (ref readonly var c in processing)
                                 EncodeToUtf8HexWithPercent(c, ref vsb);
-                            return true;
+                            return AppendEncodedPathResult.Handled;
                         default: // The string partially requires character encoding
                             Debug.Assert(notRequireEncodeUnifiedIndex != 0);
 
@@ -86,7 +101,7 @@ internal static partial class PercentEncoding
             }
         }
 
-        return true;
+        return AppendEncodedPathResult.Handled;
 
         static int MakeUnifiedIndex(int firstSetIndex, int secondSetIndex)
         {
