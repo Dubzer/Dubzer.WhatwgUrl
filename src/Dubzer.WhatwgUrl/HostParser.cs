@@ -111,16 +111,18 @@ internal static class HostParser
             var currentIndex = 0;
             while (true)
             {
-                var index = span[currentIndex..].IndexOfAny(FastPathInvalid);
+                var slice = span[currentIndex..];
+                var index = slice.IndexOfAny(FastPathInvalid);
+
                 if (index == -1)
                 {
                     asciiFastPath = true;
                     break;
                 }
 
-                if (span[index] == '%' ||
+                if (slice[index] == '%' ||
                     // span[index..] is ['-', '-', ..]
-                    span[index] == '-' && span.Length > index + 1 && span[index + 1] == '-')
+                    slice[index] == '-' && slice.Length > index + 1 && slice[index + 1] == '-')
                     break;
 
                 currentIndex += index + 1;
