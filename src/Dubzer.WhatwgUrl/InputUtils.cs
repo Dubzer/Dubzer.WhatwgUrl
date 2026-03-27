@@ -21,27 +21,34 @@ internal static class InputUtils
     {
         var inputSpan = input.AsSpan();
 
-        //If input contains any leading or trailing C0 control or space, invalid-URL-unit validation error.
-        var start = inputSpan.IndexOfAnyExceptInRange('\x00', '\x20');
-        if (start == -1)
+        var controlCharStart = inputSpan.IndexOfAnyInRange('\x00', '\x20');
+        if (controlCharStart < 0)
         {
-            return "";
+            // we can safely return because InvalidUrlUnitSearchValues is also in that range
+            return input;
         }
 
+        if (controlCharStart == 0)
+        {
+            // we have trailing control chars
+            var start = inputSpan.IndexOfAnyExceptInRange('\x00', '\x20');
+            if (start == -1)
+                return "";
+
+            inputSpan = inputSpan[start..];
+        }
+
+        // we may also have leading control chars
         var end = inputSpan.LastIndexOfAnyExceptInRange('\x00', '\x20');
         if (end == -1)
-        {
-            end = inputSpan.Length - 1;
-        }
+            return "";
 
-        inputSpan = inputSpan[start..(end + 1)];
+        inputSpan = inputSpan[..(end+1)];
 
         //  invalid-URL-unit
         var invalidUrlUnitPosition = inputSpan.IndexOfAny(InvalidUrlUnitSearchValues);
         if (invalidUrlUnitPosition == -1)
-        {
             return inputSpan.Length == input.Length ? input : inputSpan.ToString();
-        }
 
         var length = inputSpan.Length;
         var buffer = length <= Consts.MaxLengthOnStack.Char
