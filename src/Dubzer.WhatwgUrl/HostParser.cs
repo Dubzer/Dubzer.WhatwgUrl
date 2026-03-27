@@ -23,26 +23,40 @@ internal static class HostParser
     // https://url.spec.whatwg.org/#ends-in-a-number-checker
     private static bool EndsInANumber(ReadOnlySpan<char> input)
     {
-        // 1. Let parts be the result of strictly splitting input on U+002E (.).
-        var lastPartOffset = input.LastIndexOf('.');
+        if (input.Length == 0)
+            return false;
 
-        // 2. If the last item in parts is the empty string, then:
-        if (lastPartOffset == input.Length - 1)
+        char lastChar;
+        var end = input.Length;
+        // If the last item in parts is the empty string, then:
+        if (input[^1] == '.')
         {
-            input = input[..^1];
-
-            // 1. If parts’s size is 1, then return false.
-            lastPartOffset = input.LastIndexOf('.');
-            if (lastPartOffset == -1 && lastPartOffset == input.Length - 1)
+            // If parts’s size is 1, then return false
+            if (input.Length <= 1)
                 return false;
+
+            lastChar = input[^2];
+            // Remove the last item from parts.
+            end--;
+        }
+        else
+        {
+            lastChar = input[^1];
+            end = input.Length;
         }
 
-        input = input[(lastPartOffset + 1)..];
+        if (!char.IsAsciiHexDigit(lastChar) && lastChar is not ('x' or 'X'))
+            return false;
 
-        if (input.Length > 0 && !input.ContainsAnyExceptInRange('0', '9'))
+        // 1. Let parts be the result of strictly splitting input on U+002E (.).
+        var lastPartOffset = input[..end].LastIndexOf('.');
+
+        var lastPart = input[(lastPartOffset + 1)..end];
+
+        if (!lastPart.ContainsAnyExceptInRange('0', '9'))
             return true;
 
-        return Ipv4Parser.ParseNumber(input) != -1;
+        return Ipv4Parser.ParseNumber(lastPart) != -1;
     }
 
     // https://url.spec.whatwg.org/#concept-opaque-host-parser
