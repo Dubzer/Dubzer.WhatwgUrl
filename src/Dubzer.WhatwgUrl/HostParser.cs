@@ -73,12 +73,11 @@ internal static class HostParser
 
         return Result<string>.Success(sb.ToString());
     }
-
     // characters that are not allowed for executing fast path
-#if NET8_0
-    private static readonly SearchValues<char> FastPathInvalid = SearchValues.Create("-%");
-#else
+#if NET9_0_OR_GREATER
     private static readonly SearchValues<string> FastPathInvalid = SearchValues.Create(["%", "--"], StringComparison.Ordinal);
+#else
+    private static readonly SearchValues<char> FastPathInvalid = SearchValues.Create("-%");
 #endif
 
     // https://url.spec.whatwg.org/#host-parsing
@@ -105,8 +104,7 @@ internal static class HostParser
         var span = input.AsSpan();
 
         var asciiFastPath = false;
-        // additional validation for fast path
-        // TODO: SearchValues<ReadOnlySpan<char>> can be used when .NET 9 is targeted
+        // the fast path is valid when we don't need to do any punycode decoding
         if (input.Length < Consts.MaxLengthOnStack.Char
             && RuntimeHelpers.TryEnsureSufficientExecutionStack()
             && Ascii.IsValid(input))
@@ -136,13 +134,27 @@ internal static class HostParser
             }
 #endif
         }
+
+        string asciiDomainString;
         scoped ReadOnlySpan<char> asciiDomainSpan;
         if (asciiFastPath)
         {
-            Span<char> buf = stackalloc char[input.Length];
-            span.ToLowerInvariant(buf);
-
-            asciiDomainSpan = buf;
+            // reuse the existing string
+            // assuming that most of the domains are already lowercased
+            if (!span.ContainsAnyInRange('A', 'Z'))
+            {
+                asciiDomainString = input;
+                asciiDomainSpan = span;
+            }
+            else
+            {
+                asciiDomainString = string.Create(input.Length, input, static (dest, src) =>
+                {
+                    // this is safe because we've already checked that the string is ASCII
+                    Ascii.ToLower(src.AsSpan(), dest, out _);
+                });
+                asciiDomainSpan = asciiDomainString.AsSpan();
+            }
         }
         else
         {
@@ -153,6 +165,7 @@ internal static class HostParser
             if (string.IsNullOrEmpty(asciiDomain))
                 return Result<string>.Failure(UrlErrorCode.DomainToAscii);
 
+            asciiDomainString = asciiDomain;
             asciiDomainSpan = asciiDomain.AsSpan();
         }
 
@@ -164,8 +177,8 @@ internal static class HostParser
         // which states to serialize a number to a string
         // only when serializing the host.
         if (EndsInANumber(asciiDomainSpan))
-            return Ipv4Parser.Parse(asciiDomainSpan.ToString());
+            return Ipv4Parser.Parse(asciiDomainString);
 
-        return Result<string>.Success(asciiDomainSpan.ToString());
+        return Result<string>.Success(asciiDomainString);
     }
 }
