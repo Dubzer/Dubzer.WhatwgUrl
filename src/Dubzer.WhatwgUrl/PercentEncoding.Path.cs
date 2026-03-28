@@ -1,6 +1,5 @@
 using System;
 using System.Buffers;
-using System.Diagnostics;
 using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
@@ -39,12 +38,10 @@ internal static partial class PercentEncoding
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     ];
 
-    // https://url.spec.whatwg.org/#path-percent-encode-set
-    private static readonly SearchValues<char> PathEncodeSet = SearchValues.Create([
-        '\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07', '\x08', '\x09', '\x0A', '\x0B', '\x0C', '\x0D', '\x0E', '\x0F',
-        '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17', '\x18', '\x19', '\x1A', '\x1B', '\x1C', '\x1D', '\x1E', '\x1F',
-        ' ', '"', '#', '<', '>', '?', '^', '`', '{', '}'
-    ]);
+    // Inverted https://url.spec.whatwg.org/#path-percent-encode-set
+    private static readonly SearchValues<char> PathEncodeSet = SearchValues.Create(
+        "!$%&'()*+,-./0123456789:;=@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]_abcdefghijklmnopqrstuvwxyz|~"
+        );
 
 
     public static AppendEncodedPathResult AppendEncodedPath(ReadOnlySpan<char> input, ref ValueStringBuilder vsb)
@@ -58,66 +55,43 @@ internal static partial class PercentEncoding
 
         while (!processing.IsEmpty)
         {
-            var highC0Index = processing.IndexOfAnyInRange('\x7F', char.MaxValue);
-            var requireEncodeIndex = processing.IndexOfAny(PathEncodeSet);
+            var requireEncodeIndex = processing.IndexOfAnyExcept(PathEncodeSet);
 
-            var requireEncodeUnifiedIndex = MakeUnifiedIndex(highC0Index, requireEncodeIndex);
-            if (noProcessing && requireEncodeUnifiedIndex == -1)
+            if (noProcessing && requireEncodeIndex == -1)
                 return AppendEncodedPathResult.NoProcessing;
 
             noProcessing = false;
-            switch (requireEncodeUnifiedIndex)
+            switch (requireEncodeIndex)
             {
                 case -1: // No characters to encode
                     vsb.Append(processing);
                     return AppendEncodedPathResult.Handled;
 
                 case 0: // Missing fragment that DOES NOT require character encoding
-                    var notRequireEncodeIndex = processing.IndexOfAnyExcept(PathEncodeSet);
-                    var notRequireEncodeInHighC0Index = processing.IndexOfAnyExceptInRange('\x7F', char.MaxValue);
+                    var notRequireEncodeIndex = processing.IndexOfAny(PathEncodeSet);
 
-                    var notRequireEncodeUnifiedIndex = MakeInvertedUnifiedIndex(notRequireEncodeInHighC0Index, notRequireEncodeIndex);
-
-                    switch (notRequireEncodeUnifiedIndex)
+                    if (notRequireEncodeIndex == -1)
                     {
-                        case -1: // The entire string up to the end needs to be encoded
-                            foreach (ref readonly var c in processing)
-                                EncodeToUtf8HexWithPercent(c, ref vsb);
-                            return AppendEncodedPathResult.Handled;
-                        default: // The string partially requires character encoding
-                            Debug.Assert(notRequireEncodeUnifiedIndex != 0);
-
-                            foreach (ref readonly var c in processing[..notRequireEncodeUnifiedIndex])
-                                EncodeToUtf8HexWithPercent(c, ref vsb);
-
-                            processing = processing[notRequireEncodeUnifiedIndex..];
-                            continue;
+                        // The entire remainder of the string needs encoding
+                        foreach (var c in processing)
+                            EncodeToUtf8HexWithPercent(c, ref vsb);
+                        return AppendEncodedPathResult.Handled;
                     }
 
-                default: // Has a part that can be copied without further processing
-                    vsb.Append(processing[..requireEncodeUnifiedIndex]);
-                    processing = processing[requireEncodeUnifiedIndex..];
-                    goto case 0;
+                    foreach (var c in processing[..notRequireEncodeIndex])
+                        EncodeToUtf8HexWithPercent(c, ref vsb);
+
+                    processing = processing[notRequireEncodeIndex..];
+                    break;
+                default:
+                    // Copy the safe prefix without further processing
+                    vsb.Append(processing[..requireEncodeIndex]);
+                    processing = processing[requireEncodeIndex..];
+                    break;
             }
         }
 
         return AppendEncodedPathResult.Handled;
-
-        static int MakeUnifiedIndex(int firstSetIndex, int secondSetIndex)
-        {
-            if (firstSetIndex == -1)
-                return secondSetIndex;
-
-            if (secondSetIndex == -1)
-                return firstSetIndex;
-
-            return Math.Min(firstSetIndex, secondSetIndex);
-        }
-
-        static int MakeInvertedUnifiedIndex(int firstSetIndex, int secondSetIndex) =>
-            firstSetIndex == -1 || secondSetIndex == -1
-                ? -1
-                : Math.Max(firstSetIndex, secondSetIndex);
     }
     private static readonly SearchValues<char> SpecialHandlingChars = SearchValues.Create(['\\', '%']);
 

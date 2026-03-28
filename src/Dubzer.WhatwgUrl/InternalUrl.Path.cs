@@ -92,25 +92,28 @@ internal partial class InternalUrl
             return;
         }
 
-        if (Remainder.Length == 0)
+        var remainder = Remainder;
+
+        if (remainder.Length == 0)
         {
             Path.Add("/");
             _firstPathSegmentWithSlash = true;
             return;
         }
 
-        var lastInPath = Remainder.IndexOfAny(LastInPathSearchValues);
+        var lastInPath = remainder.IndexOfAny(LastInPathSearchValues);
         var endsWithChar = '\u0000';
         ReadOnlySpan<char> path;
-        if (lastInPath == -1)
+        // a trick to avoid a bound check
+        if ((uint)lastInPath >= (uint)remainder.Length)
         {
-            lastInPath = Remainder.Length;
-            path = Remainder;
+            lastInPath = remainder.Length;
+            path = remainder;
         }
         else
         {
-            path = Remainder[..lastInPath];
-            endsWithChar = Remainder[lastInPath];
+            path = remainder[..lastInPath];
+            endsWithChar = remainder[lastInPath];
         }
 
         var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
@@ -120,6 +123,7 @@ internal partial class InternalUrl
 
             var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
 
+            // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
             switch (handled)
             {
                 case PercentEncoding.AppendEncodedPathResult.Handled:
@@ -131,8 +135,6 @@ internal partial class InternalUrl
                 case PercentEncoding.AppendEncodedPathResult.Fallback:
                     Pointer--;
                     return;
-                default:
-                    throw new ArgumentOutOfRangeException();
             }
 
 

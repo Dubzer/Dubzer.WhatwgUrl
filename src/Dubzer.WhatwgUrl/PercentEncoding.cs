@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Dubzer.WhatwgUrl.BclInternal;
 
@@ -166,14 +167,15 @@ internal static partial class PercentEncoding
 
     // Based on HexConverter.ToCharsBuffer
     // See also Util.ByteFormatX2
-    private static void ToHexCharsWithPercent(byte value, ref ValueStringBuilder vsb)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ToHexCharsWithPercent(byte value, Span<char> buffer, int startingIndex = 0)
     {
         var difference = ((value & 0xF0U) << 4) + (value & 0x0FU) - 0x8989U;
         var packedResult = (((uint) -(int) difference & 0x7070U) >> 4) + difference + 0xB9B9U;
 
-        vsb.Append('%');
-        vsb.Append((char) (packedResult >> 8));
-        vsb.Append((char) (packedResult & 0xFF));
+        buffer[startingIndex] = '%';
+        buffer[startingIndex + 2] = (char)(packedResult & 0xFF);
+        buffer[startingIndex + 1] = (char) (packedResult >> 8);
     }
 
     // Inlined Rune.TryEncodeToUtf8
@@ -205,29 +207,31 @@ internal static partial class PercentEncoding
 
     // Inlined Rune.TryEncodeToUtf8
     // TODO: Better to unify on one builder type
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void EncodeToUtf8HexWithPercent(char c, ref ValueStringBuilder vsb)
     {
+        Span<char> buffer;
         switch ((uint) c)
         {
             case <= 0x7Fu:
-                ToHexCharsWithPercent((byte) c, ref vsb);
+                buffer = vsb.AppendSpan(3);
+                ToHexCharsWithPercent((byte) c, buffer);
                 return;
 
             case <= 0x7FFu:
+                buffer = vsb.AppendSpan(6);
                 // Scalar 00000yyy yyxxxxxx -> bytes [ 110yyyyy 10xxxxxx ]
-                ToHexCharsWithPercent((byte) ((c + (0b110u << 11)) >> 6), ref vsb);
-                ToHexCharsWithPercent((byte) ((c & 0x3Fu) + 0x80u), ref vsb);
+                ToHexCharsWithPercent((byte) ((c + (0b110u << 11)) >> 6), buffer);
+                ToHexCharsWithPercent((byte) ((c & 0x3Fu) + 0x80u), buffer, 3);
                 return;
 
             case <= 0xFFFFu:
+                buffer = vsb.AppendSpan(9);
                 // Scalar zzzzyyyy yyxxxxxx -> bytes [ 1110zzzz 10yyyyyy 10xxxxxx ]
-                ToHexCharsWithPercent((byte) ((c + (0b1110 << 16)) >> 12), ref vsb);
-                ToHexCharsWithPercent((byte) (((c & (0x3Fu << 6)) >> 6) + 0x80u), ref vsb);
-                ToHexCharsWithPercent((byte) ((c & 0x3Fu) + 0x80u), ref vsb);
+                ToHexCharsWithPercent((byte) ((c + (0b1110 << 16)) >> 12), buffer);
+                ToHexCharsWithPercent((byte) (((c & (0x3Fu << 6)) >> 6) + 0x80u), buffer, 3);
+                ToHexCharsWithPercent((byte) ((c & 0x3Fu) + 0x80u), buffer, 6);
                 return;
-
-            default:
-                throw new ArgumentOutOfRangeException(nameof(c));
         }
     }
 
