@@ -476,7 +476,13 @@ internal partial class InternalUrl
             if (Buf.Length != 0)
             {
                 // 2. If port is greater than 2^16 − 1
-                if (!ushort.TryParse(Buf.ToString(), CultureInfo.InvariantCulture, out var port))
+                var portBuf = Buf.Length <= 128
+                    ? stackalloc char[Buf.Length] 
+                    : new char[Buf.Length];
+
+                Buf.CopyTo(0, portBuf, Buf.Length);
+
+                if (!ushort.TryParse(portBuf, CultureInfo.InvariantCulture, out var port))
                 {
                     Error = UrlErrorCode.PortOutOfRange;
                     return;
