@@ -55,13 +55,13 @@ public class DomUrl : IEquatable<DomUrl>
     /// Returns the search (query) of this URL
     /// </summary>
     /// <include file='DomUrl.Doc.xml' path='links/remarks[@name="Search"]'/>
-    public string Search => string.IsNullOrEmpty(_internalUrl.Query) ? "" : $"?{_internalUrl.Query}";
+    public string Search => _internalUrl.SerializeSearch();
 
     /// <summary>
     /// Returns the hash (fragment) of this URL
     /// </summary>
     /// <include file='DomUrl.Doc.xml' path='links/remarks[@name="Hash"]'/>
-    public string Hash => string.IsNullOrEmpty(_internalUrl.Fragment) ? "" : $"#{_internalUrl.Fragment}";
+    public string Hash => _internalUrl.SerializeHash();
 
     /// <summary>
     /// Returns the protocol (scheme) of this URL

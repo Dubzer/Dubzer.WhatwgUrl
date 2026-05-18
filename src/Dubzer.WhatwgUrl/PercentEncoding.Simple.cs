@@ -7,6 +7,14 @@ namespace Dubzer.WhatwgUrl;
 // a fast implementation for parts that do not require fallback logic
 internal static partial class PercentEncoding
 {
+    public enum AppendEncodedSimpleResult : byte
+    {
+        // vsb contains a valid result
+        Handled,
+        // the input does not require processing and can be used as is
+        NoProcessing
+    }
+
     // Inverted https://url.spec.whatwg.org/#query-percent-encode-set
     public static readonly SearchValues<char> QueryEncodeSet = SearchValues.Create([
         '!', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8','9',
@@ -32,34 +40,50 @@ internal static partial class PercentEncoding
         'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~'
     ]);
 
-    public static void AppendEncodedSimple(ReadOnlySpan<char> input, ref ValueStringBuilder vsb, SearchValues<char> set)
+    public static AppendEncodedSimpleResult AppendEncodedSimple(ReadOnlySpan<char> input, ref ValueStringBuilder vsb, SearchValues<char> set)
     {
-        while (!input.IsEmpty)
+        var processing = input;
+        var noProcessing = true;
+
+        while (!processing.IsEmpty)
         {
-            int encodeIndex = input.IndexOfAnyExcept(set);
+            var requireEncodeIndex = processing.IndexOfAnyExcept(set);
 
-            if (encodeIndex == -1)
+            if (noProcessing && requireEncodeIndex == -1)
+                return AppendEncodedSimpleResult.NoProcessing;
+
+            noProcessing = false;
+            switch (requireEncodeIndex)
             {
-                vsb.Append(input);
-                break;
+                case -1: // No characters to encode
+                    vsb.Append(processing);
+                    return AppendEncodedSimpleResult.Handled;
+
+                case 0: // Missing fragment that DOES NOT require character encoding
+                    var notRequireEncodeIndex = processing.IndexOfAny(set);
+
+                    if (notRequireEncodeIndex == -1)
+                    {
+                        // The entire remainder of the string needs encoding
+                        foreach (var c in processing)
+                            EncodeToUtf8HexWithPercent(c, ref vsb);
+                        return AppendEncodedSimpleResult.Handled;
+                    }
+
+                    foreach (var c in processing[..notRequireEncodeIndex])
+                        EncodeToUtf8HexWithPercent(c, ref vsb);
+
+                    processing = processing[notRequireEncodeIndex..];
+                    break;
+
+                default:
+                    // Copy the safe prefix without further processing
+                    vsb.Append(processing[..requireEncodeIndex]);
+                    processing = processing[requireEncodeIndex..];
+                    break;
             }
-
-            if (encodeIndex > 0)
-            {
-                vsb.Append(input[..encodeIndex]);
-                input = input[encodeIndex..];
-            }
-
-            int safeIndex = input.IndexOfAny(set);
-            if (safeIndex == -1)
-                safeIndex = input.Length;
-
-            foreach (char c in input[..safeIndex])
-            {
-                EncodeToUtf8HexWithPercent(c, ref vsb);
-            }
-
-            input = input[safeIndex..];
         }
+
+        return AppendEncodedSimpleResult.NoProcessing;
     }
 }

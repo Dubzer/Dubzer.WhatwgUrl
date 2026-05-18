@@ -127,11 +127,11 @@ internal sealed class InternalUrlRune : InternalUrl
                 ShortenPath();
 
                 if (c != '/' && !(c == '\\' && IsSpecial))
-                    Path.Add("");
+                    Path.Add(UrlComponent.Empty);
             }
             else if (Util.IsSingleDot(str) && c != '/' && !(c == '\\' && IsSpecial))
             {
-                Path.Add("");
+                Path.Add(UrlComponent.Empty);
             }
             else if (!Util.IsSingleDot(str))
             {
@@ -144,7 +144,7 @@ internal sealed class InternalUrlRune : InternalUrl
                     str = $"{str[0]}:";
                 }
 
-                Path.Add(str);
+                Path.Add(new UrlComponent(str));
             }
 
             Buf.Clear();
@@ -188,7 +188,7 @@ internal sealed class InternalUrlRune : InternalUrl
             else
                 PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InQueryEncodeSet, Buf);
 
-            Query = Buf.ToString();
+            Query = new UrlComponent(Buf.ToString());
             Buf.Clear();
 
             // If c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
@@ -209,7 +209,7 @@ internal sealed class InternalUrlRune : InternalUrl
     {
         if (Pointer == Length)
         {
-            Fragment = Buf.ToString();
+            Fragment = new UrlComponent(Buf.ToString());
             Buf.Clear();
             return;
         }

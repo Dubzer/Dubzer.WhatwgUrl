@@ -10,14 +10,17 @@ namespace Dubzer.WhatwgUrl;
 internal partial class InternalUrl
 {
     private bool _triedFastPath;
-    protected List<string> Path = [];
+    protected List<UrlComponent> Path = [];
 
-    /// <summary>
-    /// this is a special case for the PathStateFast,
-    /// which outputs path as a single string
-    /// that doesn't require prepending '/' on serialization
-    /// </summary>
-    private bool _firstPathSegmentWithSlash;
+    protected static List<UrlComponent> ClonePath(InternalUrl source)
+    {
+        var copy = new List<UrlComponent>(source.Path.Count);
+        foreach (var pathComponent in source.Path)
+            copy.Add(pathComponent.Materialize(source.Input));
+
+
+        return copy;
+    }
 
     protected virtual void PathState(char c)
     {
@@ -39,11 +42,11 @@ internal partial class InternalUrl
                 ShortenPath();
 
                 if (c != '/' && !(c == '\\' && IsSpecial))
-                    Path.Add("");
+                    Path.Add(UrlComponent.Empty);
             }
             else if (Util.IsSingleDot(str) && c != '/' && !(c == '\\' && IsSpecial))
             {
-                Path.Add("");
+                Path.Add(UrlComponent.Empty);
             }
             else if (!Util.IsSingleDot(str))
             {
@@ -56,7 +59,7 @@ internal partial class InternalUrl
                     str = $"{str[0]}:";
                 }
 
-                Path.Add(str);
+                Path.Add(new UrlComponent(str));
             }
 
             Buf.Clear();
@@ -86,7 +89,7 @@ internal partial class InternalUrl
     // This implementation handles the whole path in one state machine iteration
     private void PathStateFast()
     {
-        if (Path.Count != 0 || string.Equals(Scheme, Schemes.File, StringComparison.Ordinal))
+        if (Path.Count != 0 || Scheme == Schemes.File)
         {
             Pointer--;
             return;
@@ -96,8 +99,7 @@ internal partial class InternalUrl
 
         if (remainder.Length == 0)
         {
-            Path.Add("/");
-            _firstPathSegmentWithSlash = true;
+            Path.Add(UrlComponent.Empty);
             return;
         }
 
@@ -119,26 +121,22 @@ internal partial class InternalUrl
         var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
         try
         {
-            vsb.Append('/');
-
             var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
 
             // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
             switch (handled)
             {
                 case PercentEncoding.AppendEncodedPathResult.Handled:
-                    Path.Add(vsb.ToString());
+                    Path.Add(new UrlComponent(vsb.ToString()));
                     break;
                 case PercentEncoding.AppendEncodedPathResult.NoProcessing:
-                    Path.Add(string.Concat("/", path));
+                    Path.Add(new UrlComponent(Pointer, path.Length));
                     break;
                 case PercentEncoding.AppendEncodedPathResult.Fallback:
                     Pointer--;
                     return;
             }
 
-
-            _firstPathSegmentWithSlash = true;
             Pointer += lastInPath;
 
             switch (endsWithChar)
@@ -162,7 +160,7 @@ internal partial class InternalUrl
     protected void ShortenPath()
     {
         // If url’s scheme is "file", path’s size is 1, and path[0] is a normalized Windows drive letter, then return.
-        if (Scheme == Schemes.File && Path.Count == 1 && IsNormalizedWindowDriveLetter(Path[0]))
+        if (Scheme == Schemes.File && Path.Count == 1 && IsNormalizedWindowDriveLetter(Path[0].AsSpan(Input)))
             return;
 
         // Remove path’s last item, if any.
@@ -170,19 +168,22 @@ internal partial class InternalUrl
             return;
 
         var lastPart = Path[^1];
-        var slashInPart = lastPart.LastIndexOf('/');
-        if (slashInPart > 0)
+        var lastPartSpan = lastPart.AsSpan(Input);
+        var slashInPart = lastPartSpan.LastIndexOf('/');
+        if (slashInPart != -1)
         {
-            Path[^1] = lastPart[..slashInPart];
+            Path[^1] = new UrlComponent(lastPartSpan[..slashInPart].ToString());
         }
         else
         {
-            // we no longer have a segment with handled slash
-            if (Path.Count == 1)
-                _firstPathSegmentWithSlash = false;
-
             Path.RemoveAt(Path.Count - 1);
         }
+    }
+
+    private void AppendSerializedPath(StringBuilder sb)
+    {
+        foreach (var pathComponent in Path)
+            AppendSerializedComponent(sb, pathComponent, Input, '/');
     }
 
     // https://url.spec.whatwg.org/#url-path-serializer
@@ -191,27 +192,14 @@ internal partial class InternalUrl
         if (_opaquePath != null)
             return _opaquePath;
 
-        // we can skip sb allocation because we know that first segment already starts with '/'
-        // and there's only one segment
-        if (_firstPathSegmentWithSlash && Path.Count == 1)
-        {
-            return Path[0];
-        }
+        if (Path.Count == 0)
+            return "";
 
-        var i = 0;
+        if (Path.Count == 1)
+            return SerializeComponent(Path[0], Input, '/');
+
         var sb = new StringBuilder();
-
-        if (_firstPathSegmentWithSlash)
-        {
-            sb.Append(Path[0]);
-            i++;
-        }
-
-        for (; i < Path.Count; i++)
-        {
-            sb.Append('/');
-            sb.Append(Path[i]);
-        }
+        AppendSerializedPath(sb);
 
         return sb.ToString();
     }

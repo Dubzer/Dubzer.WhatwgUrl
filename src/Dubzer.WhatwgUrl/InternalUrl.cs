@@ -1,9 +1,7 @@
 using System;
-using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
@@ -12,8 +10,8 @@ internal partial class InternalUrl
     internal string Scheme = "";
     internal string? Host;
     internal int? Port;
-    internal string? Query;
-    internal string? Fragment;
+    internal UrlComponent Query = UrlComponent.Missing;
+    internal UrlComponent Fragment = UrlComponent.Missing;
 
     protected UrlErrorCode? Error;
 
@@ -39,19 +37,29 @@ internal partial class InternalUrl
     {
         BaseUrl = baseUrl;
 
-        Input = InputUtils.Format(input);
-        Buf = new StringBuilder(Input.Length);
+        var formattedInput = InputUtils.Format(input);
 
-        Length = Input.Length;
+        Input = formattedInput;
+        Length = formattedInput.Length;
+        Buf = new StringBuilder(formattedInput.Length);
+
+        if (formattedInput.StartsWith("https://", StringComparison.Ordinal))
+        {
+            UpdateScheme(Schemes.Https);
+            State = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
+            Pointer = "https://".Length;
+        }
 
         for (; Pointer <= Length; Pointer++)
         {
-            var c = Pointer < Length ? Input[Pointer] : '\0';
+            int p = Pointer;
+            // a trick to avoid a bound check
+            char c = (uint)p < (uint)formattedInput.Length ? formattedInput[p] : '\0';
 
-            Debug.WriteLine($"State: {State}, char: {c}");
+            //Debug.WriteLine($"State: {State}, char: {c}");
             RunStateMachine(c);
-            if (Error != null)
-                return Result<InternalUrl>.Failure(Error.Value);
+            if (Error.HasValue)
+                return Result<InternalUrl>.Failure(Error.GetValueOrDefault());
         }
 
         return Result<InternalUrl>.Success(this);
@@ -269,7 +277,7 @@ internal partial class InternalUrl
             // (since base has an opaque path, setting it instead of the _path)
             _opaquePath = BaseUrl._opaquePath; // url’s path to base’s path,
 
-            Query = BaseUrl.Query; // url’s query to base’s query,
+            Query = CloneQuery(BaseUrl); // url’s query to base’s query,
             Buf.EnsureCapacity(Length - Pointer); // url’s fragment to the empty string,
 
             State = InternalUrlParserState.Fragment; // and set state to fragment state.
@@ -318,9 +326,8 @@ internal partial class InternalUrl
             Password = BaseUrl.Password;
             Host = BaseUrl.Host;
             Port = BaseUrl.Port;
-            Path = [..BaseUrl.Path];
-            Query = BaseUrl.Query;
-            _firstPathSegmentWithSlash = BaseUrl._firstPathSegmentWithSlash;
+            Path = ClonePath(BaseUrl);
+            Query = CloneQuery(BaseUrl);
 
             if (c == '?')
             {
@@ -333,7 +340,7 @@ internal partial class InternalUrl
             }
             else if (c != '\u0000')
             {
-                Query = null;
+                Query = UrlComponent.Missing;
                 ShortenPath();
                 State = InternalUrlParserState.Path;
                 Pointer--;
@@ -476,7 +483,13 @@ internal partial class InternalUrl
             if (Buf.Length != 0)
             {
                 // 2. If port is greater than 2^16 − 1
-                if (!ushort.TryParse(Buf.ToString(), CultureInfo.InvariantCulture, out var port))
+                var portBuf = Buf.Length <= 128
+                    ? stackalloc char[Buf.Length] 
+                    : new char[Buf.Length];
+
+                Buf.CopyTo(0, portBuf, Buf.Length);
+
+                if (!ushort.TryParse(portBuf, CultureInfo.InvariantCulture, out var port))
                 {
                     Error = UrlErrorCode.PortOutOfRange;
                     return;
@@ -514,8 +527,8 @@ internal partial class InternalUrl
         else if (BaseUrl is { Scheme: Schemes.File })
         {
             Host = BaseUrl.Host;
-            Path = [..BaseUrl.Path];
-            Query = BaseUrl.Query;
+            Path = ClonePath(BaseUrl);
+            Query = CloneQuery(BaseUrl);
             if (c == '?')
             {
                 State = InternalUrlParserState.Query;
@@ -527,7 +540,7 @@ internal partial class InternalUrl
             }
             else if (c != '\u0000')
             {
-                Query = null;
+                Query = UrlComponent.Missing;
                 // If the code point substring from pointer to the end of input does not start with a Windows drive letter
                 if (!StartsWithAWindowsDriveLetter(Remainder))
                     ShortenPath();
@@ -570,10 +583,10 @@ internal partial class InternalUrl
                 // If the code point substring from pointer to the end of input does not start with a Windows drive letter
                 if (!StartsWithAWindowsDriveLetter(Remainder)
                     // and base’s path[0] is a normalized Windows drive letter,
-                    && IsNormalizedWindowDriveLetter(BaseUrl.Path[0]))
+                    && IsNormalizedWindowDriveLetter(BaseUrl.Path[0].AsSpan(BaseUrl.Input)))
                 {
                     // then append base’s path[0] to url’s path.
-                    Path.Add(BaseUrl.Path[0]);
+                    Path.Add(BaseUrl.Path[0].Materialize(BaseUrl.Input));
                 }
             }
 
@@ -712,64 +725,6 @@ internal partial class InternalUrl
         }
     }
 
-    // https://url.spec.whatwg.org/#query-state
-    protected virtual void QueryState(char c)
-    {
-        // skipping this since we don't support other encodings
-        // 1. If encoding is not UTF-8 and one of the following is true: ...
-
-        // unwrapped state machine + fast encoding
-
-        var query = Remainder;
-
-        var end = query.IndexOf('#');
-        var endsWithFragment = end != -1;
-        if (endsWithFragment)
-            query = query[..end];
-
-        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
-        try
-        {
-            var set = IsSpecial ? PercentEncoding.SpecialQueryEncodeSet : PercentEncoding.QueryEncodeSet;
-            PercentEncoding.AppendEncodedSimple(query, ref vsb, set);
-
-            Pointer += query.Length;
-            if (endsWithFragment)
-            {
-                Buf.EnsureCapacity(Length - Pointer);
-                State = InternalUrlParserState.Fragment;
-            }
-
-            Query = vsb.ToString();
-            Buf.Clear();
-        }
-        finally
-        {
-            vsb.Dispose();
-        }
-    }
-
-    // https://url.spec.whatwg.org/#fragment-state
-    protected virtual void FragmentState(char c)
-    {
-        // unwrapped state machine + fast encoding
-
-        var fragment = Remainder;
-        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
-        try
-        {
-            PercentEncoding.AppendEncodedSimple(fragment, ref vsb,  PercentEncoding.FragmentEncodeSet);
-
-            Pointer += fragment.Length;
-            Fragment = vsb.ToString();
-            Buf.Clear();
-        }
-        finally
-        {
-            vsb.Dispose();
-        }
-    }
-
     // helper with bound guard
     protected virtual char NextChar(int n) =>
         Pointer + n >= Length
@@ -777,7 +732,7 @@ internal partial class InternalUrl
             : Input[Pointer + n];
 
     // https://url.spec.whatwg.org/#normalized-windows-drive-letter
-    private static bool IsNormalizedWindowDriveLetter(string input) =>
+    private static bool IsNormalizedWindowDriveLetter(ReadOnlySpan<char> input) =>
         input.Length == 2 && char.IsAsciiLetter(input[0]) && input[1] == ':';
 
     // https://url.spec.whatwg.org/#start-with-a-windows-drive-letter
@@ -823,15 +778,18 @@ internal partial class InternalUrl
 
         // 3. If url’s host is null, url does not have an opaque path, url’s path’s size is greater than 1,
         // and url’s path[0] is the empty string
-        if (Host == null && _opaquePath == null && Path.Count > 1 && string.IsNullOrEmpty(Path[0]))
+        if (Host == null && _opaquePath == null && Path.Count > 1 && Path[0].IsEmpty)
             sb.Append("/.");
 
-        sb.Append(SerializePathname());
-        if (Query != null)
-            sb.Append('?').Append(Query);
+        if (_opaquePath != null)
+            sb.Append(_opaquePath);
+        else
+            AppendSerializedPath(sb);
 
-        if (!excludeFragment && Fragment != null)
-            sb.Append('#').Append(Fragment);
+        AppendSerializedComponent(sb, Query, Input, '?');
+
+        if (!excludeFragment)
+            AppendSerializedComponent(sb, Fragment, Input, '#');
 
         return sb.ToString();
     }
