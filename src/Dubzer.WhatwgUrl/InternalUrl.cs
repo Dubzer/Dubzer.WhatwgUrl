@@ -37,12 +37,13 @@ internal partial class InternalUrl
     {
         BaseUrl = baseUrl;
 
-        Input = InputUtils.Format(input);
-        Buf = new StringBuilder(Input.Length);
+        var formattedInput = InputUtils.Format(input);
 
-        Length = Input.Length;
+        Input = formattedInput;
+        Length = formattedInput.Length;
+        Buf = new StringBuilder(formattedInput.Length);
 
-        if (Input.StartsWith("https://", StringComparison.Ordinal))
+        if (formattedInput.StartsWith("https://", StringComparison.Ordinal))
         {
             UpdateScheme(Schemes.Https);
             State = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
@@ -51,12 +52,14 @@ internal partial class InternalUrl
 
         for (; Pointer <= Length; Pointer++)
         {
-            var c = Pointer < Length ? Input[Pointer] : '\0';
+            int p = Pointer;
+            // a trick to avoid a bound check
+            char c = (uint)p < (uint)formattedInput.Length ? formattedInput[p] : '\0';
 
             //Debug.WriteLine($"State: {State}, char: {c}");
             RunStateMachine(c);
-            if (Error != null)
-                return Result<InternalUrl>.Failure(Error.Value);
+            if (Error.HasValue)
+                return Result<InternalUrl>.Failure(Error.GetValueOrDefault());
         }
 
         return Result<InternalUrl>.Success(this);
