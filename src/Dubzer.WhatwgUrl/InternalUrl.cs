@@ -49,6 +49,12 @@ internal partial class InternalUrl
             State = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
             Pointer = "https://".Length;
         }
+        else if (formattedInput.StartsWith("http://", StringComparison.Ordinal))
+        {
+            UpdateScheme(Schemes.Http);
+            State = InternalUrlParserState.SpecialAuthorityIgnoreSlashes;
+            Pointer = "http://".Length;
+        }
 
         for (; Pointer <= Length; Pointer++)
         {
