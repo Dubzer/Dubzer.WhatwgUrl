@@ -36,7 +36,7 @@ internal partial class InternalUrl
 
         Input = formattedInput;
         Length = formattedInput.Length;
-        Buf = new StringBuilder(formattedInput.Length);
+        Buf = new StringBuilder();
 
         if (formattedInput.StartsWith("https://", StringComparison.Ordinal))
         {
