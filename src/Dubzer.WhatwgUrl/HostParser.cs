@@ -60,16 +60,15 @@ internal static class HostParser
     }
 
     // https://url.spec.whatwg.org/#concept-opaque-host-parser
-    private static Result<string> ParseOpaqueHost(string input)
+    private static Result<string> ParseOpaqueHost(ReadOnlySpan<char> input)
     {
-        var span = input.AsSpan();
-        if (span.ContainsAny(ForbiddenHostCodePoints))
+        if (input.ContainsAny(ForbiddenHostCodePoints))
             return Result<string>.Failure(UrlErrorCode.HostInvalidCodePoint);
 
         // TODO: If input contains a code point that is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
 
         var sb = new StringBuilder(input.Length);
-        PercentEncoding.PercentEncode(input, PercentEncoding.InC0ControlPercentEncodeSet, sb);
+        PercentEncoding.PercentEncode(input.ToString(), PercentEncoding.InC0ControlPercentEncodeSet, sb);
 
         return Result<string>.Success(sb.ToString());
     }
@@ -83,41 +82,40 @@ internal static class HostParser
     // https://url.spec.whatwg.org/#host-parsing
     public static Result<string> Parse(ReadOnlySpan<char> inputSpan, bool isOpaque)
     {
-        var input = inputSpan.ToString();
         // 1. If input starts with U+005B ([), then:
-        if (input.Length > 0 && input[0] == '[')
+        if (inputSpan.Length > 0 && inputSpan[0] == '[')
         {
-            if (input[^1] != ']')
+            if (inputSpan[^1] != ']')
                 return Result<string>.Failure(UrlErrorCode.Ipv6Unclosed);
 
             // Return IPv6 as a string here, unlike the spec,
             // which states to serialize a number to a string
             // only when serializing the host.
-            var ipv6Result = Ipv6Parser.Parse(input[1..^1]);
+            var ipv6Result = Ipv6Parser.Parse(inputSpan[1..^1].ToString());
             return ipv6Result
                 ? Result<string>.Success(ipv6Result.Value!)
                 : ipv6Result;
         }
 
         if (isOpaque)
-            return ParseOpaqueHost(input);
+            return ParseOpaqueHost(inputSpan);
 
-        var span = input.AsSpan();
+        var input = inputSpan.ToString();
 
         var asciiFastPath = false;
         // the fast path is valid when we don't need to do any punycode decoding
-        if (input.Length < Consts.MaxLengthOnStack.Char
+        if (inputSpan.Length < Consts.MaxLengthOnStack.Char
             && RuntimeHelpers.TryEnsureSufficientExecutionStack()
-            && Ascii.IsValid(input))
+            && Ascii.IsValid(inputSpan))
         {
 #if NET9_0_OR_GREATER
-            asciiFastPath = !span.ContainsAny(FastPathInvalid);
+            asciiFastPath = !inputSpan.ContainsAny(FastPathInvalid);
 #else
 
             var currentIndex = 0;
             while (true)
             {
-                var slice = span[currentIndex..];
+                var slice = inputSpan[currentIndex..];
                 var index = slice.IndexOfAny(FastPathInvalid);
 
                 if (index == -1)
@@ -142,10 +140,10 @@ internal static class HostParser
         {
             // reuse the existing string
             // assuming that most of the domains are already lowercased
-            if (!span.ContainsAnyInRange('A', 'Z'))
+            if (!inputSpan.ContainsAnyInRange('A', 'Z'))
             {
                 asciiDomainString = input;
-                asciiDomainSpan = span;
+                asciiDomainSpan = inputSpan;
             }
             else
             {
