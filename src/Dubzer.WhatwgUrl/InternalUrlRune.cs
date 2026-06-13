@@ -44,17 +44,17 @@ internal sealed class InternalUrlRune : InternalUrl
     // 100k benchmark, which is critical
     protected override void AppendCurrent(char c)
     {
-        Buf.AppendRune(_currentRune);
+        GetBuf().AppendRune(_currentRune);
     }
 
     protected override void AppendCurrentEncoded(char c, ReadOnlySpan<byte> set)
     {
-        PercentEncoding.AppendEncoded(_currentRune, Buf, set);
+        PercentEncoding.AppendEncoded(_currentRune, GetBuf(), set);
     }
 
     protected override void AppendCurrentEncodedInC0(char c)
     {
-        PercentEncoding.AppendEncodedInC0(_currentRune, Buf);
+        PercentEncoding.AppendEncodedInC0(_currentRune, GetBuf());
     }
 
     protected override void AuthorityState(char c)
@@ -63,12 +63,12 @@ internal sealed class InternalUrlRune : InternalUrl
         {
             Debug.WriteLine("invalid-credentials");
             if (AtSignSeen)
-                Buf.Insert(0, "%40");
+                GetBuf().Insert(0, "%40");
             else
                 AtSignSeen = true;
 
             AuthorityStringBuilder ??= new StringBuilder();
-            foreach (var rune in Buf.ToString().EnumerateRunes())
+            foreach (var rune in (Buf?.ToString() ?? "").EnumerateRunes())
             {
                 if (rune == new Rune(':') && !PasswordTokenSeen)
                 {
@@ -81,11 +81,11 @@ internal sealed class InternalUrlRune : InternalUrl
                 PercentEncoding.AppendEncoded(rune, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSetLookup);
             }
 
-            Buf.Clear();
+            Buf?.Clear();
         }
         else if (c is '/' or '?' or '#' || (IsSpecial && c == '\\') || Pointer == Length)
         {
-            if (AtSignSeen && Buf.Length == 0)
+            if (AtSignSeen && BufLength == 0)
             {
                 Error = UrlErrorCode.HostMissing;
                 return;
@@ -105,13 +105,13 @@ internal sealed class InternalUrlRune : InternalUrl
                 AuthorityStringBuilder.Clear();
             }
 
-            Pointer -= Buf.ToString().EnumerateRunes().Count() + 1;
-            Buf.Clear();
+            Pointer -= (Buf?.ToString() ?? "").EnumerateRunes().Count() + 1;
+            Buf?.Clear();
             State = InternalUrlParserState.Host;
         }
         else
         {
-            Buf.AppendRune(_currentRune);
+            GetBuf().AppendRune(_currentRune);
         }
     }
 
@@ -119,13 +119,13 @@ internal sealed class InternalUrlRune : InternalUrl
     {
         if (c == ':' && !_arrFlag)
         {
-            if (Buf.Length == 0)
+            if (BufLength == 0)
             {
                 Error = UrlErrorCode.HostMissing;
                 return;
             }
 
-            var input = Buf.ToString();
+            var input = Buf?.ToString() ?? "";
             var parseResult = HostParser.Parse(input, true);
             if (!parseResult)
             {
@@ -134,20 +134,20 @@ internal sealed class InternalUrlRune : InternalUrl
             }
 
             Host = parseResult.Value.ToComponent(input);
-            Buf.Clear();
+            Buf?.Clear();
             State = InternalUrlParserState.Port;
         }
         else if (c is '/' or '?' or '#' || IsSpecial && c == '\\' || Pointer == Length)
         {
             Pointer--;
 
-            if (IsSpecial && Buf.Length == 0)
+            if (IsSpecial && BufLength == 0)
             {
                 Error = UrlErrorCode.HostMissing;
                 return;
             }
 
-            var input = Buf.ToString();
+            var input = Buf?.ToString() ?? "";
             var parseResult = HostParser.Parse(input, !IsSpecial);
             if (!parseResult)
             {
@@ -156,7 +156,7 @@ internal sealed class InternalUrlRune : InternalUrl
             }
 
             Host = parseResult.Value.ToComponent(input);
-            Buf.Clear();
+            Buf?.Clear();
             State = InternalUrlParserState.PathStart;
         }
         else
@@ -177,7 +177,7 @@ internal sealed class InternalUrlRune : InternalUrl
             if (IsSpecial && c == '\\')
                 Debug.WriteLine("invalid-reverse-solidus");
 
-            var str = Buf.ToString();
+            var str = Buf?.ToString() ?? "";
             if (Util.IsDoubleDot(str))
             {
                 ShortenPath();
@@ -203,14 +203,13 @@ internal sealed class InternalUrlRune : InternalUrl
                 Path.Add(new UrlComponent(str));
             }
 
-            Buf.Clear();
+            Buf?.Clear();
             switch (c)
             {
                 case '?':
                     State = InternalUrlParserState.Query;
                     break;
                 case '#':
-                    Buf.EnsureCapacity(Length - Pointer);
                     State = InternalUrlParserState.Fragment;
                     break;
             }
@@ -236,21 +235,21 @@ internal sealed class InternalUrlRune : InternalUrl
         // c is the EOF code point
         if (c == '#' || Pointer >= Length)
         {
-            var inputToEncode = Buf.ToString();
-            Buf.Clear();
+            var inputToEncode = Buf?.ToString() ?? "";
+            var buf = GetBuf();
+            buf.Clear();
 
             if (IsSpecial)
-                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InSpecialQueryEncodeSet, Buf);
+                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InSpecialQueryEncodeSet, buf);
             else
-                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InQueryEncodeSet, Buf);
+                PercentEncoding.PercentEncode(inputToEncode, PercentEncoding.InQueryEncodeSet, buf);
 
-            Query = new UrlComponent(Buf.ToString());
-            Buf.Clear();
+            Query = new UrlComponent(buf.ToString());
+            buf.Clear();
 
             // If c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
             if (c == '#')
             {
-                Buf.EnsureCapacity(Length - Pointer);
                 State = InternalUrlParserState.Fragment;
             }
         }
@@ -265,8 +264,8 @@ internal sealed class InternalUrlRune : InternalUrl
     {
         if (Pointer == Length)
         {
-            Fragment = new UrlComponent(Buf.ToString());
-            Buf.Clear();
+            Fragment = new UrlComponent(Buf?.ToString() ?? "");
+            Buf?.Clear();
             return;
         }
 

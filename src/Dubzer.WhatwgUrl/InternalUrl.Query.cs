@@ -39,11 +39,10 @@ internal partial class InternalUrl
         Pointer += query.Length;
         if (endsWithFragment)
         {
-            Buf.EnsureCapacity(Length - Pointer);
             State = InternalUrlParserState.Fragment;
         }
 
-        Buf.Clear();
+        Buf?.Clear();
     }
 
     private static UrlComponent CloneQuery(InternalUrl source) =>

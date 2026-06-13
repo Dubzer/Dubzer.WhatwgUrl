@@ -17,10 +17,11 @@ internal partial class InternalUrl
 
     protected int Pointer;
     protected InternalUrlParserState State = InternalUrlParserState.SchemeStart;
-    protected StringBuilder Buf = null!;
+    protected StringBuilder? Buf;
     protected string Input = "";
     private ReadOnlySpan<char> Remainder => Input.AsSpan()[Pointer..];
     protected int Length;
+    protected int BufLength => Buf?.Length ?? 0;
 
     protected bool IsSpecial;
 
@@ -36,7 +37,7 @@ internal partial class InternalUrl
 
         Input = formattedInput;
         Length = formattedInput.Length;
-        Buf = new StringBuilder();
+        Buf = null;
 
         if (formattedInput.StartsWith("https://", StringComparison.Ordinal))
         {
@@ -68,18 +69,20 @@ internal partial class InternalUrl
 
     protected virtual void AppendCurrent(char c)
     {
-        Buf.Append(c);
+        GetBuf().Append(c);
     }
 
     protected virtual void AppendCurrentEncoded(char c, ReadOnlySpan<byte> set)
     {
-        PercentEncoding.AppendEncoded(c, Buf, set);
+        PercentEncoding.AppendEncoded(c, GetBuf(), set);
     }
 
     protected virtual void AppendCurrentEncodedInC0(char c)
     {
-        PercentEncoding.AppendEncodedInC0(c, Buf);
+        PercentEncoding.AppendEncodedInC0(c, GetBuf());
     }
+
+    protected StringBuilder GetBuf() => Buf ??= new StringBuilder();
 
     #region State machine switch
 
@@ -179,7 +182,7 @@ internal partial class InternalUrl
     {
         if (char.IsAsciiLetter(c))
         {
-            Buf.Append(char.ToLowerInvariant(c));
+            GetBuf().Append(char.ToLowerInvariant(c));
             State = InternalUrlParserState.Scheme;
         }
         // (the state override is not supported, thus it will the last branch of this state)
@@ -197,7 +200,7 @@ internal partial class InternalUrl
         // 1. If c is an ASCII alphanumeric, U+002B (+), U+002D (-), or U+002E (.),
         if (char.IsAsciiLetterOrDigit(c) || c is '+' or '-' or '.')
         {
-            Buf.Append(char.ToLowerInvariant(c)); // append c, lowercased, to buffer.
+            GetBuf().Append(char.ToLowerInvariant(c)); // append c, lowercased, to buffer.
         }
         // 2. Otherwise, if c is U+003A (:), then:
         else if (c == ':')
@@ -205,12 +208,12 @@ internal partial class InternalUrl
             // currently not supporting state override
 
             // 2. Set url’s scheme to buffer.
-            UpdateScheme(Buf.ToString());
+            UpdateScheme(Buf?.ToString() ?? "");
 
             // skipping state override here too
 
             // 4. Set buffer the empty string.
-            Buf.Clear();
+            Buf?.Clear();
 
             if (Scheme == Schemes.File)
             {
@@ -254,7 +257,7 @@ internal partial class InternalUrl
         // Otherwise, if state override is not given,
         else
         {
-            Buf.Clear(); // set buffer to the empty string
+            Buf?.Clear(); // set buffer to the empty string
             State = InternalUrlParserState.NoScheme; // state to no scheme state
             Pointer = -1; // and start over (from the first code point in input).
         }
@@ -279,7 +282,6 @@ internal partial class InternalUrl
             _opaquePath = BaseUrl._opaquePath; // url’s path to base’s path,
 
             Query = CloneQuery(BaseUrl); // url’s query to base’s query,
-            Buf.EnsureCapacity(Length - Pointer); // url’s fragment to the empty string,
 
             State = InternalUrlParserState.Fragment; // and set state to fragment state.
             return;
@@ -336,7 +338,6 @@ internal partial class InternalUrl
             }
             else if (c == '#')
             {
-                Buf.EnsureCapacity(Length - Pointer);
                 State = InternalUrlParserState.Fragment;
             }
             else if (c != '\u0000')
@@ -422,19 +423,20 @@ internal partial class InternalUrl
     {
         if (char.IsAsciiDigit(c))
         {
-            Buf.Append(c);
+            GetBuf().Append(c);
         }
         // pointer is past the port, which means we can parse it
         else if (Pointer == Length || c is '/' or '?' or '#' || IsSpecial && c == '\\')
         {
-            if (Buf.Length != 0)
+            if (Buf is { Length: > 0 } buf)
             {
+                var length = buf.Length;
                 // 2. If port is greater than 2^16 − 1
-                var portBuf = Buf.Length <= 128
-                    ? stackalloc char[Buf.Length] 
-                    : new char[Buf.Length];
+                Span<char> portBuf = length <= 128
+                    ? stackalloc char[length]
+                    : new char[length];
 
-                Buf.CopyTo(0, portBuf, Buf.Length);
+                buf.CopyTo(0, portBuf, length);
 
                 if (!ushort.TryParse(portBuf, CultureInfo.InvariantCulture, out var port))
                 {
@@ -447,7 +449,7 @@ internal partial class InternalUrl
                 else
                     Port = port;
 
-                Buf.Clear();
+                buf.Clear();
             }
             // If state override is given, then return.
 
@@ -482,7 +484,6 @@ internal partial class InternalUrl
             }
             else if (c == '#')
             {
-                Buf.EnsureCapacity(Length - Pointer);
                 State = InternalUrlParserState.Fragment;
             }
             else if (c != '\u0000')
@@ -549,7 +550,7 @@ internal partial class InternalUrl
         {
             Pointer--;
             // state override here
-            if (Buf.Length == 2 && char.IsAsciiLetter(Buf[0]) && Buf[1] is ':' or '|')
+            if (Buf is { Length: 2 } buf && char.IsAsciiLetter(buf[0]) && buf[1] is ':' or '|')
             {
                 Debug.WriteLine("file-invalid-Windows-drive-letter-host");
 
@@ -558,7 +559,7 @@ internal partial class InternalUrl
                 // and doesn't use Buf made by other states
                 if (this is not InternalUrlRune)
                 {
-                    Buf.Clear();
+                    buf.Clear();
                     Pointer -= 2;
                 }
 
@@ -566,7 +567,7 @@ internal partial class InternalUrl
                 return;
             }
 
-            if (Buf.Length == 0)
+            if (BufLength == 0)
             {
                 Host = UrlComponent.Empty;
                 // If state override is given, then return.
@@ -574,7 +575,7 @@ internal partial class InternalUrl
                 return;
             }
 
-            var input = Buf.ToString();
+            var input = Buf?.ToString() ?? "";
             var parseResult = HostParser.Parse(input, !IsSpecial);
             if (!parseResult)
             {
@@ -589,7 +590,7 @@ internal partial class InternalUrl
                 Host = new UrlComponent(parsedHost);
 
             // If state override is given, then return.
-            Buf.Clear();
+            Buf?.Clear();
             State = InternalUrlParserState.PathStart;
         }
         else
@@ -616,7 +617,6 @@ internal partial class InternalUrl
         }
         else if (c == '#')
         {
-            Buf.EnsureCapacity(Length - Pointer);
             State = InternalUrlParserState.Fragment;
         }
         else if (Pointer != Length)
@@ -632,15 +632,14 @@ internal partial class InternalUrl
     {
         if (c == '?')
         {
-            _opaquePath = Buf.ToString();
-            Buf.Clear();
+            _opaquePath = Buf?.ToString() ?? "";
+            Buf?.Clear();
             State = InternalUrlParserState.Query;
         }
         else if (c == '#')
         {
-            _opaquePath = Buf.ToString();
-            Buf.Clear();
-            Buf.EnsureCapacity(Length - Pointer);
+            _opaquePath = Buf?.ToString() ?? "";
+            Buf?.Clear();
             State = InternalUrlParserState.Fragment;
         }
         else if (c == ' ')
@@ -648,12 +647,12 @@ internal partial class InternalUrl
             // If remaining starts with U+003F (?) or U+003F (#), then append "%20" to url’s path.
             if (NextChar(1) is '?' or '#')
             {
-                Buf.Append("%20");
+                GetBuf().Append("%20");
             }
             // Otherwise, append U+0020 SPACE to url’s path.
             else
             {
-                Buf.Append(' ');
+                GetBuf().Append(' ');
             }
         }
         else
@@ -669,8 +668,8 @@ internal partial class InternalUrl
             }
             else
             {
-                _opaquePath = Buf.ToString();
-                Buf.Clear();
+                _opaquePath = Buf?.ToString() ?? "";
+                Buf?.Clear();
             }
         }
     }

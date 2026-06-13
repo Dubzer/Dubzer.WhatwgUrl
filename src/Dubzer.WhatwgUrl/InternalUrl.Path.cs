@@ -36,7 +36,7 @@ internal partial class InternalUrl
             if (IsSpecial && c == '\\')
                 Debug.WriteLine("invalid-reverse-solidus");
 
-            var str = Buf.ToString();
+            var str = Buf?.ToString() ?? "";
             if (Util.IsDoubleDot(str))
             {
                 ShortenPath();
@@ -62,14 +62,13 @@ internal partial class InternalUrl
                 Path.Add(new UrlComponent(str));
             }
 
-            Buf.Clear();
+            Buf?.Clear();
             switch (c)
             {
                 case '?':
                     State = InternalUrlParserState.Query;
                     break;
                 case '#':
-                    Buf.EnsureCapacity(Length - Pointer);
                     State = InternalUrlParserState.Fragment;
                     break;
             }
@@ -145,7 +144,6 @@ internal partial class InternalUrl
                     State = InternalUrlParserState.Query;
                     break;
                 case '#':
-                    Buf.EnsureCapacity(Length - Pointer);
                     State = InternalUrlParserState.Fragment;
                     break;
             }
