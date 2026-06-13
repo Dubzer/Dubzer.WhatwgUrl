@@ -18,7 +18,7 @@ internal partial class InternalUrl
         // search values used when not insideBrackets
         var normalSearchValues = isSpecial ? SpecialHostStateEnd : HostStateEnd;
 
-        var hostSpan = Remainder;
+        var rawHost = Remainder;
         
         var endsAtChar = '\0';
 
@@ -27,12 +27,12 @@ internal partial class InternalUrl
 
         while (true)
         {
-            var index = hostSpan[searchOffset..].IndexOfAny(searchValues);
+            var index = rawHost[searchOffset..].IndexOfAny(searchValues);
             if (index == -1)
                 break;
 
             var charOffset = searchOffset + index;
-            var currentChar = hostSpan[charOffset];
+            var currentChar = rawHost[charOffset];
 
             switch (currentChar)
             {
@@ -46,22 +46,20 @@ internal partial class InternalUrl
                     continue;
             }
 
-            hostSpan = hostSpan[..charOffset];
+            rawHost = rawHost[..charOffset];
             endsAtChar = currentChar;
             break;
         }
 
-        if (hostSpan.Length == 0 && (endsAtChar == ':' || isSpecial))
+        if (rawHost.Length == 0 && (endsAtChar == ':' || isSpecial))
         {
             Error = UrlErrorCode.HostMissing;
             return;
         }
 
-        var host = hostSpan.ToString();
-
         var parseResult = endsAtChar == ':' 
-            ? HostParser.Parse(host, true) 
-            : HostParser.Parse(host, !isSpecial);
+            ? HostParser.Parse(rawHost, true) 
+            : HostParser.Parse(rawHost, !isSpecial);
 
         if (!parseResult)
         {
@@ -72,12 +70,12 @@ internal partial class InternalUrl
         Host = parseResult.Value;
         if (endsAtChar == ':')
         {
-            Pointer += hostSpan.Length;
+            Pointer += rawHost.Length;
             State = InternalUrlParserState.Port;
             return;
         }
 
-        Pointer += hostSpan.Length - 1;
+        Pointer += rawHost.Length - 1;
         State = InternalUrlParserState.PathStart;
     }
 }

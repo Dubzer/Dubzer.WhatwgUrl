@@ -81,8 +81,9 @@ internal static class HostParser
 #endif
 
     // https://url.spec.whatwg.org/#host-parsing
-    public static Result<string> Parse(string input, bool isOpaque)
+    public static Result<string> Parse(ReadOnlySpan<char> inputSpan, bool isOpaque)
     {
+        var input = inputSpan.ToString();
         // 1. If input starts with U+005B ([), then:
         if (input.Length > 0 && input[0] == '[')
         {
