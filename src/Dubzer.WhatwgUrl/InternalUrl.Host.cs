@@ -57,8 +57,8 @@ internal partial class InternalUrl
             return;
         }
 
-        var parseResult = endsAtChar == ':' 
-            ? HostParser.Parse(rawHost, true) 
+        var parseResult = endsAtChar == ':'
+            ? HostParser.Parse(rawHost, true)
             : HostParser.Parse(rawHost, !isSpecial);
 
         if (!parseResult)
@@ -67,7 +67,7 @@ internal partial class InternalUrl
             return;
         }
 
-        Host = parseResult.Value;
+        Host = parseResult.Value.ToComponent(Pointer, rawHost.Length);
         if (endsAtChar == ':')
         {
             Pointer += rawHost.Length;
@@ -78,4 +78,7 @@ internal partial class InternalUrl
         Pointer += rawHost.Length - 1;
         State = InternalUrlParserState.PathStart;
     }
+
+    private static UrlComponent CloneHost(InternalUrl source) =>
+        source.Host.Materialize(source.Input);
 }

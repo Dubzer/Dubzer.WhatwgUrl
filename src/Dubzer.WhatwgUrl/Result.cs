@@ -46,15 +46,17 @@ internal readonly struct Result<T>
 {
     internal readonly T? Value;
     internal readonly UrlErrorCode? Error;
+    private readonly bool _success;
 
-    private Result(T? value, UrlErrorCode? error)
+    private Result(T? value, UrlErrorCode? error, bool success)
     {
         Value = value;
         Error = error;
+        _success = success;
     }
 
-    internal static Result<T> Success(T value) => new(value, null);
-    internal static Result<T> Failure(UrlErrorCode error) => new(default, error);
+    internal static Result<T> Success(T value) => new(value, null, true);
+    internal static Result<T> Failure(UrlErrorCode error) => new(default, error, false);
 
-    public static implicit operator bool(Result<T> result) => result.Value is not null;
+    public static implicit operator bool(Result<T> result) => result._success;
 }

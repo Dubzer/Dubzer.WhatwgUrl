@@ -8,7 +8,7 @@ namespace Dubzer.WhatwgUrl;
 internal partial class InternalUrl
 {
     internal string Scheme = "";
-    internal string? Host;
+    internal UrlComponent Host = UrlComponent.Missing;
     internal int? Port;
     internal UrlComponent Query = UrlComponent.Missing;
     internal UrlComponent Fragment = UrlComponent.Missing;
@@ -325,7 +325,7 @@ internal partial class InternalUrl
         {
             Username = BaseUrl.Username;
             Password = BaseUrl.Password;
-            Host = BaseUrl.Host;
+            Host = CloneHost(BaseUrl);
             Port = BaseUrl.Port;
             Path = ClonePath(BaseUrl);
             Query = CloneQuery(BaseUrl);
@@ -363,7 +363,7 @@ internal partial class InternalUrl
         {
             Username = BaseUrl!.Username;
             Password = BaseUrl!.Password;
-            Host = BaseUrl!.Host;
+            Host = CloneHost(BaseUrl!);
             Port = BaseUrl!.Port;
 
             State = InternalUrlParserState.Path;
@@ -464,7 +464,7 @@ internal partial class InternalUrl
     protected void FileState(char c)
     {
         UpdateScheme(Schemes.File);
-        Host = "";
+        Host = UrlComponent.Empty;
 
         if (c is '/' or '\\')
         {
@@ -473,7 +473,7 @@ internal partial class InternalUrl
         }
         else if (BaseUrl is { Scheme: Schemes.File })
         {
-            Host = BaseUrl.Host;
+            Host = CloneHost(BaseUrl);
             Path = ClonePath(BaseUrl);
             Query = CloneQuery(BaseUrl);
             if (c == '?')
@@ -525,7 +525,7 @@ internal partial class InternalUrl
         {
             if (BaseUrl is { Scheme: Schemes.File })
             {
-                Host = BaseUrl.Host;
+                Host = CloneHost(BaseUrl);
 
                 // If the code point substring from pointer to the end of input does not start with a Windows drive letter
                 if (!StartsWithAWindowsDriveLetter(Remainder)
@@ -568,22 +568,25 @@ internal partial class InternalUrl
 
             if (Buf.Length == 0)
             {
-                Host = "";
+                Host = UrlComponent.Empty;
                 // If state override is given, then return.
                 State = InternalUrlParserState.PathStart;
                 return;
             }
 
-            var parseResult = HostParser.Parse(Buf.ToString(), !IsSpecial);
+            var input = Buf.ToString();
+            var parseResult = HostParser.Parse(input, !IsSpecial);
             if (!parseResult)
             {
                 Error = parseResult.Error;
                 return;
             }
 
-            Host = parseResult.Value == "localhost"
-                ? ""
-                : parseResult.Value;
+            var parsedHost = parseResult.Value.ToString(input);
+            if (parsedHost == "localhost")
+                Host = UrlComponent.Empty;
+            else
+                Host = new UrlComponent(parsedHost);
 
             // If state override is given, then return.
             Buf.Clear();
@@ -708,7 +711,7 @@ internal partial class InternalUrl
         var sb = new StringBuilder();
         sb.Append(Scheme).Append(':');
 
-        if (Host != null)
+        if (Host.HasValue)
         {
             sb.Append("//");
             if (!string.IsNullOrEmpty(Username) || !string.IsNullOrEmpty(Password))
@@ -720,12 +723,12 @@ internal partial class InternalUrl
                 sb.Append('@');
             }
 
-            sb.Append(SerializeHost());
+            AppendSerializedHost(sb);
         }
 
         // 3. If url’s host is null, url does not have an opaque path, url’s path’s size is greater than 1,
         // and url’s path[0] is the empty string
-        if (Host == null && _opaquePath == null && Path.Count > 1 && Path[0].IsEmpty)
+        if (!Host.HasValue && _opaquePath == null && Path.Count > 1 && Path[0].IsEmpty)
             sb.Append("/.");
 
         if (_opaquePath != null)
@@ -744,12 +747,26 @@ internal partial class InternalUrl
     // https://url.spec.whatwg.org/#host-serializing
     internal string SerializeHost()
     {
-        if (Host == null)
+        if (!Host.HasValue)
             return "";
 
-        return Port != null
-            ? $"{Host}:{Port}"
-            : Host;
+        if (!Port.HasValue)
+            return Host.GetString(Input);
+
+        var sb = new StringBuilder(Host.SerializedLength + 6);
+        AppendSerializedHost(sb);
+        return sb.ToString();
+    }
+
+    internal string SerializeHostname() =>
+        Host.GetString(Input);
+
+    private void AppendSerializedHost(StringBuilder sb)
+    {
+        sb.Append(Host.AsSpan(Input));
+
+        if (Port.HasValue)
+            sb.Append(':').Append(Port.GetValueOrDefault());
     }
 
     // TODO: needs to be verified with the spec. Currently works like in the ada

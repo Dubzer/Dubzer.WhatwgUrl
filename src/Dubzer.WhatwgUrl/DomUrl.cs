@@ -37,7 +37,7 @@ public class DomUrl : IEquatable<DomUrl>
     /// Returns the hostname of this URL
     /// </summary>
     /// <include file='DomUrl.Doc.xml' path='links/remarks[@name="Hostname"]'/>
-    public string Hostname => _internalUrl.Host ?? "";
+    public string Hostname => _internalUrl.SerializeHostname();
 
     /// <summary>
     /// Returns the port of this URL

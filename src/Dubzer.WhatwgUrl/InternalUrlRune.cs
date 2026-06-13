@@ -125,14 +125,15 @@ internal sealed class InternalUrlRune : InternalUrl
                 return;
             }
 
-            var parseResult = HostParser.Parse(Buf.ToString(), true);
+            var input = Buf.ToString();
+            var parseResult = HostParser.Parse(input, true);
             if (!parseResult)
             {
                 Error = parseResult.Error;
                 return;
             }
 
-            Host = parseResult.Value;
+            Host = parseResult.Value.ToComponent(input);
             Buf.Clear();
             State = InternalUrlParserState.Port;
         }
@@ -146,14 +147,15 @@ internal sealed class InternalUrlRune : InternalUrl
                 return;
             }
 
-            var parseResult = HostParser.Parse(Buf.ToString(), !IsSpecial);
+            var input = Buf.ToString();
+            var parseResult = HostParser.Parse(input, !IsSpecial);
             if (!parseResult)
             {
                 Error = parseResult.Error;
                 return;
             }
 
-            Host = parseResult.Value;
+            Host = parseResult.Value.ToComponent(input);
             Buf.Clear();
             State = InternalUrlParserState.PathStart;
         }
