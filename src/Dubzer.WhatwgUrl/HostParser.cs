@@ -1,6 +1,5 @@
 using System;
 using System.Buffers;
-using System.Runtime.CompilerServices;
 using System.Text;
 using Dubzer.WhatwgUrl.Uts46;
 
@@ -139,9 +138,7 @@ internal static class HostParser
 
         var asciiFastPath = false;
         // the fast path is valid when we don't need to do any punycode decoding
-        if (inputSpan.Length < Consts.MaxLengthOnStack.Char
-            && RuntimeHelpers.TryEnsureSufficientExecutionStack()
-            && Ascii.IsValid(inputSpan))
+        if (Ascii.IsValid(inputSpan))
         {
 #if NET9_0_OR_GREATER
             asciiFastPath = !inputSpan.ContainsAny(FastPathInvalid);
