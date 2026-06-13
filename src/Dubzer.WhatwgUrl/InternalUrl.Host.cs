@@ -1,0 +1,83 @@
+using System;
+using System.Buffers;
+
+namespace Dubzer.WhatwgUrl;
+
+internal partial class InternalUrl
+{
+    private static readonly SearchValues<char> HostStateEnd = SearchValues.Create(['/', '?', '#', ':', '[']);
+    private static readonly SearchValues<char> SpecialHostStateEnd = SearchValues.Create(['/', '?', '#', ':', '\\', '[']);
+    private static readonly SearchValues<char> HostStateEndInIpv6 = SearchValues.Create(['/', '?', '#', ']']);
+    private static readonly SearchValues<char> SpecialHostStateEndInIpv6 = SearchValues.Create(['/', '?', '#', '\\', ']']);
+
+    // https://url.spec.whatwg.org/#host-state
+    protected virtual void HostState(char c)
+    {
+        var isSpecial = IsSpecial;
+
+        // search values used when not insideBrackets
+        var normalSearchValues = isSpecial ? SpecialHostStateEnd : HostStateEnd;
+
+        var hostSpan = Remainder;
+        
+        var endsAtChar = '\0';
+
+        var searchValues = normalSearchValues;
+        var searchOffset = 0;
+
+        while (true)
+        {
+            var index = hostSpan[searchOffset..].IndexOfAny(searchValues);
+            if (index == -1)
+                break;
+
+            var charOffset = searchOffset + index;
+            var currentChar = hostSpan[charOffset];
+
+            switch (currentChar)
+            {
+                case '[':
+                    searchValues = isSpecial ? SpecialHostStateEndInIpv6 : HostStateEndInIpv6;
+                    searchOffset = charOffset + 1;
+                    continue;
+                case ']':
+                    searchValues = normalSearchValues;
+                    searchOffset = charOffset + 1;
+                    continue;
+            }
+
+            hostSpan = hostSpan[..charOffset];
+            endsAtChar = currentChar;
+            break;
+        }
+
+        if (hostSpan.Length == 0 && (endsAtChar == ':' || isSpecial))
+        {
+            Error = UrlErrorCode.HostMissing;
+            return;
+        }
+
+        var host = hostSpan.ToString();
+
+        var parseResult = endsAtChar == ':' 
+            ? HostParser.Parse(host, true) 
+            : HostParser.Parse(host, !isSpecial);
+
+        if (!parseResult)
+        {
+            Error = parseResult.Error;
+            return;
+        }
+
+        Host = parseResult.Value;
+        if (endsAtChar == ':')
+        {
+            Pointer += hostSpan.Length;
+            State = InternalUrlParserState.Port;
+            return;
+        }
+
+        Pointer += hostSpan.Length - 1;
+        State = InternalUrlParserState.PathStart;
+    }
+}

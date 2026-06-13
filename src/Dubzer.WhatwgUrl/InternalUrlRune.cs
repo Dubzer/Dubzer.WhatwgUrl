@@ -12,6 +12,7 @@ internal sealed class InternalUrlRune : InternalUrl
 {
     private Rune[] _inputRunes = [];
     private Rune _currentRune;
+    private bool _arrFlag;
 
     public override Result<InternalUrl> Parse(string input, InternalUrl? baseUrl = null)
     {
@@ -111,6 +112,59 @@ internal sealed class InternalUrlRune : InternalUrl
         else
         {
             Buf.AppendRune(_currentRune);
+        }
+    }
+
+    protected override void HostState(char c)
+    {
+        if (c == ':' && !_arrFlag)
+        {
+            if (Buf.Length == 0)
+            {
+                Error = UrlErrorCode.HostMissing;
+                return;
+            }
+
+            var parseResult = HostParser.Parse(Buf.ToString(), true);
+            if (!parseResult)
+            {
+                Error = parseResult.Error;
+                return;
+            }
+
+            Host = parseResult.Value;
+            Buf.Clear();
+            State = InternalUrlParserState.Port;
+        }
+        else if (c is '/' or '?' or '#' || IsSpecial && c == '\\' || Pointer == Length)
+        {
+            Pointer--;
+
+            if (IsSpecial && Buf.Length == 0)
+            {
+                Error = UrlErrorCode.HostMissing;
+                return;
+            }
+
+            var parseResult = HostParser.Parse(Buf.ToString(), !IsSpecial);
+            if (!parseResult)
+            {
+                Error = parseResult.Error;
+                return;
+            }
+
+            Host = parseResult.Value;
+            Buf.Clear();
+            State = InternalUrlParserState.PathStart;
+        }
+        else
+        {
+            if (c == '[')
+                _arrFlag = true;
+            else if (c == ']')
+                _arrFlag = false;
+
+            AppendCurrent(c);
         }
     }
 

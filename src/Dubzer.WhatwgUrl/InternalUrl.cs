@@ -26,11 +26,6 @@ internal partial class InternalUrl
 
     protected InternalUrl? BaseUrl;
 
-    /// <summary>
-    /// Pointer is inside an array (ipv6)
-    /// </summary>
-    private bool _arrFlag;
-
     private string? _opaquePath;
 
     public virtual Result<InternalUrl> Parse(string input, InternalUrl? baseUrl = null)
@@ -419,60 +414,6 @@ internal partial class InternalUrl
         else
         {
             Debug.WriteLine("special-scheme-missing-following-solidus");
-        }
-    }
-
-    // https://url.spec.whatwg.org/#host-state
-    private void HostState(char c)
-    {
-        if (c == ':' && !_arrFlag)
-        {
-            if (Buf.Length == 0)
-            {
-                Error = UrlErrorCode.HostMissing;
-                return;
-            }
-
-            var parseResult = HostParser.Parse(Buf.ToString(), true);
-            if (!parseResult)
-            {
-                Error = parseResult.Error;
-                return;
-            }
-
-            Host = parseResult.Value;
-            Buf.Clear();
-            State = InternalUrlParserState.Port;
-        }
-        else if (c is '/' or '?' or '#' || IsSpecial && c == '\\' || Pointer == Length)
-        {
-            Pointer--;
-
-            if (IsSpecial && Buf.Length == 0)
-            {
-                Error = UrlErrorCode.HostMissing;
-                return;
-            }
-
-            var parseResult = HostParser.Parse(Buf.ToString(), !IsSpecial);
-            if (!parseResult)
-            {
-                Error = parseResult.Error;
-                return;
-            }
-
-            Host = parseResult.Value;
-            Buf.Clear();
-            State = InternalUrlParserState.PathStart;
-        }
-        else
-        {
-            if (c == '[')
-                _arrFlag = true;
-            else if (c == ']')
-                _arrFlag = false;
-
-            AppendCurrent(c);
         }
     }
 
