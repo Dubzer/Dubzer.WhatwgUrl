@@ -15,18 +15,19 @@ internal partial class InternalUrl
     {
         var isSpecial = IsSpecial;
 
-        // search values used when not insideBrackets
-        var normalSearchValues = isSpecial ? SpecialHostStateEnd : HostStateEnd;
-
         var rawHost = Remainder;
-        
         var endsAtChar = '\0';
-
-        var searchValues = normalSearchValues;
         var searchOffset = 0;
+        var insideBrackets = false;
 
         while (true)
         {
+            SearchValues<char> searchValues;
+            if (!insideBrackets)
+                searchValues = isSpecial ? SpecialHostStateEnd : HostStateEnd;
+            else
+                searchValues = isSpecial ? SpecialHostStateEndInIpv6 : HostStateEndInIpv6;
+
             var index = rawHost[searchOffset..].IndexOfAny(searchValues);
             if (index == -1)
                 break;
@@ -37,11 +38,11 @@ internal partial class InternalUrl
             switch (currentChar)
             {
                 case '[':
-                    searchValues = isSpecial ? SpecialHostStateEndInIpv6 : HostStateEndInIpv6;
+                    insideBrackets = true;
                     searchOffset = charOffset + 1;
                     continue;
                 case ']':
-                    searchValues = normalSearchValues;
+                    insideBrackets = false;
                     searchOffset = charOffset + 1;
                     continue;
             }
