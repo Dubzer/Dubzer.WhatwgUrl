@@ -19,7 +19,6 @@ internal sealed class InternalUrlRune : InternalUrl
         BaseUrl = baseUrl;
 
         Input = InputUtils.Format(input);
-        Buf = new StringBuilder(Input.Length);
 
         _inputRunes = Input.EnumerateRunes().ToArray();
         Length = _inputRunes.Length;
@@ -210,7 +209,6 @@ internal sealed class InternalUrlRune : InternalUrl
                     State = InternalUrlParserState.Query;
                     break;
                 case '#':
-                    Buf.EnsureCapacity(Length - Pointer);
                     State = InternalUrlParserState.Fragment;
                     break;
             }
@@ -250,7 +248,6 @@ internal sealed class InternalUrlRune : InternalUrl
             // If c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
             if (c == '#')
             {
-                Buf.EnsureCapacity(Length - Pointer);
                 State = InternalUrlParserState.Fragment;
             }
         }

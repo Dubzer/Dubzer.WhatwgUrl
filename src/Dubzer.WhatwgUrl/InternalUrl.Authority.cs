@@ -23,7 +23,7 @@ internal partial class InternalUrl
         var isTerminator = c is '/' or '?' or '#' || (IsSpecial && c == '\\') || Pointer == Length;
 
         // fast path
-        if (!isTerminator && c != '@' && Buf.Length == 0 && !AtSignSeen)
+        if (!isTerminator && c != '@' && BufLength == 0 && !AtSignSeen)
         {
             var end = IsSpecial
                 ? Remainder.IndexOfAny(SpecialAuthorityEnd)
@@ -46,27 +46,30 @@ internal partial class InternalUrl
                 AtSignSeen = true;
 
             AuthorityStringBuilder ??= new StringBuilder();
-            foreach (var chunk in Buf.GetChunks())
+            if (_buf is { } buf)
             {
-                foreach (var bufC in chunk.Span)
+                foreach (var chunk in buf.GetChunks())
                 {
-                    if (bufC == ':' && !PasswordTokenSeen)
+                    foreach (var bufC in chunk.Span)
                     {
-                        Username = AuthorityStringBuilder.ToString();
-                        AuthorityStringBuilder.Clear();
-                        PasswordTokenSeen = true;
-                        continue;
+                        if (bufC == ':' && !PasswordTokenSeen)
+                        {
+                            Username = AuthorityStringBuilder.ToString();
+                            AuthorityStringBuilder.Clear();
+                            PasswordTokenSeen = true;
+                            continue;
+                        }
+
+                        PercentEncoding.AppendEncoded(bufC, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSetLookup);
                     }
-
-                    PercentEncoding.AppendEncoded(bufC, AuthorityStringBuilder, PercentEncoding.UserInfoEncodeSetLookup);
                 }
-            }
 
-            Buf.Clear();
+                buf.Clear();
+            }
         }
         else if (isTerminator)
         {
-            if (AtSignSeen && Buf.Length == 0)
+            if (AtSignSeen && BufLength == 0)
             {
                 Error = UrlErrorCode.HostMissing;
                 return;
@@ -86,8 +89,8 @@ internal partial class InternalUrl
                 AuthorityStringBuilder.Clear();
             }
 
-            Pointer -= Buf.Length + 1;
-            Buf.Clear();
+            Pointer -= BufLength + 1;
+            _buf?.Clear();
             State = InternalUrlParserState.Host;
         }
         else
