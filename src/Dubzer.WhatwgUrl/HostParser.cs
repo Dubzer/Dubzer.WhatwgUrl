@@ -1,6 +1,5 @@
 using System;
 using System.Buffers;
-using System.Runtime.CompilerServices;
 using System.Text;
 using Dubzer.WhatwgUrl.Uts46;
 
@@ -8,6 +7,46 @@ namespace Dubzer.WhatwgUrl;
 
 internal static class HostParser
 {
+    internal readonly struct HostParseResult
+    {
+        private readonly string? _value;
+        private readonly bool _isInputBacked;
+
+        private HostParseResult(string? value, bool isInputBacked)
+        {
+            _value = value;
+            _isInputBacked = isInputBacked;
+        }
+
+        internal static HostParseResult Input => new(null, true);
+
+        internal static HostParseResult Materialized(string value) => new(value, false);
+
+        internal UrlComponent ToComponent(int start, int length)
+        {
+            if (_isInputBacked)
+                return new UrlComponent(start, length);
+
+            return new UrlComponent(_value!);
+        }
+
+        internal UrlComponent ToComponent(string input)
+        {
+            if (_isInputBacked)
+                return new UrlComponent(input);
+
+            return new UrlComponent(_value!);
+        }
+
+        internal string ToString(string input)
+        {
+            if (_isInputBacked)
+                return input;
+
+            return _value!;
+        }
+    }
+
     // https://url.spec.whatwg.org/#forbidden-host-code-point
     private static readonly SearchValues<char> ForbiddenHostCodePoints = SearchValues.Create([
         '\u0000', '\u0009', '\u000A', '\u000D', '\u0020', '#', '/', ':', '<', '>', '?', '@', '[', '\\', ']', '^', '|'
@@ -60,16 +99,15 @@ internal static class HostParser
     }
 
     // https://url.spec.whatwg.org/#concept-opaque-host-parser
-    private static Result<string> ParseOpaqueHost(string input)
+    private static Result<string> ParseOpaqueHost(ReadOnlySpan<char> input)
     {
-        var span = input.AsSpan();
-        if (span.ContainsAny(ForbiddenHostCodePoints))
+        if (input.ContainsAny(ForbiddenHostCodePoints))
             return Result<string>.Failure(UrlErrorCode.HostInvalidCodePoint);
 
         // TODO: If input contains a code point that is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
 
         var sb = new StringBuilder(input.Length);
-        PercentEncoding.PercentEncode(input, PercentEncoding.InC0ControlPercentEncodeSet, sb);
+        PercentEncoding.PercentEncode(input.ToString(), PercentEncoding.InC0ControlPercentEncodeSet, sb);
 
         return Result<string>.Success(sb.ToString());
     }
@@ -81,42 +119,35 @@ internal static class HostParser
 #endif
 
     // https://url.spec.whatwg.org/#host-parsing
-    public static Result<string> Parse(string input, bool isOpaque)
+    public static Result<HostParseResult> Parse(ReadOnlySpan<char> inputSpan, bool isOpaque)
     {
         // 1. If input starts with U+005B ([), then:
-        if (input.Length > 0 && input[0] == '[')
+        if (inputSpan.Length > 0 && inputSpan[0] == '[')
         {
-            if (input[^1] != ']')
-                return Result<string>.Failure(UrlErrorCode.Ipv6Unclosed);
+            if (inputSpan[^1] != ']')
+                return Result<HostParseResult>.Failure(UrlErrorCode.Ipv6Unclosed);
 
             // Return IPv6 as a string here, unlike the spec,
             // which states to serialize a number to a string
             // only when serializing the host.
-            var ipv6Result = Ipv6Parser.Parse(input[1..^1]);
-            return ipv6Result
-                ? Result<string>.Success(ipv6Result.Value!)
-                : ipv6Result;
+            return MaterializedHost(Ipv6Parser.Parse(inputSpan[1..^1].ToString()));
         }
 
         if (isOpaque)
-            return ParseOpaqueHost(input);
-
-        var span = input.AsSpan();
+            return MaterializedHost(ParseOpaqueHost(inputSpan));
 
         var asciiFastPath = false;
         // the fast path is valid when we don't need to do any punycode decoding
-        if (input.Length < Consts.MaxLengthOnStack.Char
-            && RuntimeHelpers.TryEnsureSufficientExecutionStack()
-            && Ascii.IsValid(input))
+        if (Ascii.IsValid(inputSpan))
         {
 #if NET9_0_OR_GREATER
-            asciiFastPath = !span.ContainsAny(FastPathInvalid);
+            asciiFastPath = !inputSpan.ContainsAny(FastPathInvalid);
 #else
 
             var currentIndex = 0;
             while (true)
             {
-                var slice = span[currentIndex..];
+                var slice = inputSpan[currentIndex..];
                 var index = slice.IndexOfAny(FastPathInvalid);
 
                 if (index == -1)
@@ -135,35 +166,31 @@ internal static class HostParser
 #endif
         }
 
-        string asciiDomainString;
+        string? asciiDomainString = null;
         scoped ReadOnlySpan<char> asciiDomainSpan;
-        if (asciiFastPath)
+        var noProcessing = asciiFastPath && !inputSpan.ContainsAnyInRange('A', 'Z');
+        if (noProcessing)
         {
-            // reuse the existing string
-            // assuming that most of the domains are already lowercased
-            if (!span.ContainsAnyInRange('A', 'Z'))
+            asciiDomainSpan = inputSpan;
+        }
+        else if (asciiFastPath)
+        {
+            var input = inputSpan.ToString();
+            asciiDomainString = string.Create(input.Length, input, static (dest, src) =>
             {
-                asciiDomainString = input;
-                asciiDomainSpan = span;
-            }
-            else
-            {
-                asciiDomainString = string.Create(input.Length, input, static (dest, src) =>
-                {
-                    // this is safe because we've already checked that the string is ASCII
-                    Ascii.ToLower(src.AsSpan(), dest, out _);
-                });
-                asciiDomainSpan = asciiDomainString.AsSpan();
-            }
+                // this is safe because we've already checked that the string is ASCII
+                Ascii.ToLower(src.AsSpan(), dest, out _);
+            });
+            asciiDomainSpan = asciiDomainString.AsSpan();
         }
         else
         {
             // 4.Let domain be the result of running UTF-8 decode without BOM on the percent-decoding of input.
-            var domain = PercentEncoding.PercentDecode(input);
+            var domain = PercentEncoding.PercentDecode(inputSpan.ToString());
 
             var asciiDomain = Idna.ToAscii(domain);
             if (string.IsNullOrEmpty(asciiDomain))
-                return Result<string>.Failure(UrlErrorCode.DomainToAscii);
+                return Result<HostParseResult>.Failure(UrlErrorCode.DomainToAscii);
 
             asciiDomainString = asciiDomain;
             asciiDomainSpan = asciiDomain.AsSpan();
@@ -171,14 +198,30 @@ internal static class HostParser
 
         // 7. If asciiDomain contains a forbidden domain code point, ..., return failure.
         if (asciiDomainSpan.ContainsAny(ForbiddenDomainCodePoints))
-            return Result<string>.Failure(UrlErrorCode.DomainInvalidCodePoint);
+            return Result<HostParseResult>.Failure(UrlErrorCode.DomainInvalidCodePoint);
 
         // Return IPv6 as a string here, unlike the spec,
         // which states to serialize a number to a string
         // only when serializing the host.
         if (EndsInANumber(asciiDomainSpan))
-            return Ipv4Parser.Parse(asciiDomainString);
+        {
+            if (asciiDomainString == null)
+                asciiDomainString = inputSpan.ToString();
 
-        return Result<string>.Success(asciiDomainString);
+            return MaterializedHost(Ipv4Parser.Parse(asciiDomainString));
+        }
+
+        if (noProcessing)
+            return Result<HostParseResult>.Success(HostParseResult.Input);
+
+        return Result<HostParseResult>.Success(HostParseResult.Materialized(asciiDomainString!));
+
+        static Result<HostParseResult> MaterializedHost(Result<string> result)
+        {
+            if (!result)
+                return Result<HostParseResult>.Failure(result.Error.GetValueOrDefault());
+
+            return Result<HostParseResult>.Success(HostParseResult.Materialized(result.Value!));
+        }
     }
 }

@@ -26,7 +26,6 @@ internal partial class InternalUrl
         }
 
         Pointer += fragment.Length;
-        Buf.Clear();
     }
 
     internal string SerializeHash() =>

@@ -44,6 +44,17 @@ internal readonly struct UrlComponent
                 ? input.AsSpan(_start, _length)
                 : ReadOnlySpan<char>.Empty;
 
+    internal string GetString(string input)
+    {
+        if (!HasValue)
+            return "";
+
+        if (_encodedValue != null)
+            return _encodedValue;
+
+        return input.Substring(_start, _length);
+    }
+
     internal UrlComponent Materialize(string input) =>
         !HasValue || _encodedValue != null
             ? this

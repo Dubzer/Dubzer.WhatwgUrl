@@ -12,13 +12,13 @@ internal sealed class InternalUrlRune : InternalUrl
 {
     private Rune[] _inputRunes = [];
     private Rune _currentRune;
+    private bool _arrFlag;
 
     public override Result<InternalUrl> Parse(string input, InternalUrl? baseUrl = null)
     {
         BaseUrl = baseUrl;
 
         Input = InputUtils.Format(input);
-        Buf = new StringBuilder(Input.Length);
 
         _inputRunes = Input.EnumerateRunes().ToArray();
         Length = _inputRunes.Length;
@@ -114,6 +114,61 @@ internal sealed class InternalUrlRune : InternalUrl
         }
     }
 
+    protected override void HostState(char c)
+    {
+        if (c == ':' && !_arrFlag)
+        {
+            if (Buf.Length == 0)
+            {
+                Error = UrlErrorCode.HostMissing;
+                return;
+            }
+
+            var input = Buf.ToString();
+            var parseResult = HostParser.Parse(input, true);
+            if (!parseResult)
+            {
+                Error = parseResult.Error;
+                return;
+            }
+
+            Host = parseResult.Value.ToComponent(input);
+            Buf.Clear();
+            State = InternalUrlParserState.Port;
+        }
+        else if (c is '/' or '?' or '#' || IsSpecial && c == '\\' || Pointer == Length)
+        {
+            Pointer--;
+
+            if (IsSpecial && Buf.Length == 0)
+            {
+                Error = UrlErrorCode.HostMissing;
+                return;
+            }
+
+            var input = Buf.ToString();
+            var parseResult = HostParser.Parse(input, !IsSpecial);
+            if (!parseResult)
+            {
+                Error = parseResult.Error;
+                return;
+            }
+
+            Host = parseResult.Value.ToComponent(input);
+            Buf.Clear();
+            State = InternalUrlParserState.PathStart;
+        }
+        else
+        {
+            if (c == '[')
+                _arrFlag = true;
+            else if (c == ']')
+                _arrFlag = false;
+
+            AppendCurrent(c);
+        }
+    }
+
     protected override void PathState(char c)
     {
         if (Pointer == Length || c is '/' or '?' or '#' || (c == '\\' && IsSpecial))
@@ -154,7 +209,6 @@ internal sealed class InternalUrlRune : InternalUrl
                     State = InternalUrlParserState.Query;
                     break;
                 case '#':
-                    Buf.EnsureCapacity(Length - Pointer);
                     State = InternalUrlParserState.Fragment;
                     break;
             }
@@ -194,7 +248,6 @@ internal sealed class InternalUrlRune : InternalUrl
             // If c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
             if (c == '#')
             {
-                Buf.EnsureCapacity(Length - Pointer);
                 State = InternalUrlParserState.Fragment;
             }
         }

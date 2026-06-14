@@ -8,7 +8,7 @@ namespace Dubzer.WhatwgUrl;
 internal partial class InternalUrl
 {
     internal string Scheme = "";
-    internal string? Host;
+    internal UrlComponent Host = UrlComponent.Missing;
     internal int? Port;
     internal UrlComponent Query = UrlComponent.Missing;
     internal UrlComponent Fragment = UrlComponent.Missing;
@@ -17,19 +17,16 @@ internal partial class InternalUrl
 
     protected int Pointer;
     protected InternalUrlParserState State = InternalUrlParserState.SchemeStart;
-    protected StringBuilder Buf = null!;
+    protected StringBuilder? _buf;
+    protected StringBuilder Buf => _buf ??= new StringBuilder();
     protected string Input = "";
     private ReadOnlySpan<char> Remainder => Input.AsSpan()[Pointer..];
     protected int Length;
+    protected int BufLength => _buf?.Length ?? 0;
 
     protected bool IsSpecial;
 
     protected InternalUrl? BaseUrl;
-
-    /// <summary>
-    /// Pointer is inside an array (ipv6)
-    /// </summary>
-    private bool _arrFlag;
 
     private string? _opaquePath;
 
@@ -41,7 +38,6 @@ internal partial class InternalUrl
 
         Input = formattedInput;
         Length = formattedInput.Length;
-        Buf = new StringBuilder(formattedInput.Length);
 
         if (formattedInput.StartsWith("https://", StringComparison.Ordinal))
         {
@@ -90,6 +86,13 @@ internal partial class InternalUrl
 
     protected void RunStateMachine(char c)
     {
+#if DUBZER_WHATWGURL_STATE_TIMING
+        var timingSink = StateTimingSink;
+        var timedState = State;
+        var timestamp = timingSink is null ? 0 : Stopwatch.GetTimestamp();
+        try
+        {
+#endif
         switch (State)
         {
             case InternalUrlParserState.SchemeStart:
@@ -175,6 +178,14 @@ internal partial class InternalUrl
             default:
                 throw new InvalidOperationException();
         }
+#if DUBZER_WHATWGURL_STATE_TIMING
+        }
+        finally
+        {
+            if (timingSink is not null)
+                timingSink.Record(timedState, Stopwatch.GetTimestamp() - timestamp);
+        }
+#endif
     }
 
     #endregion
@@ -259,7 +270,7 @@ internal partial class InternalUrl
         // Otherwise, if state override is not given,
         else
         {
-            Buf.Clear(); // set buffer to the empty string
+            _buf?.Clear(); // set buffer to the empty string
             State = InternalUrlParserState.NoScheme; // state to no scheme state
             Pointer = -1; // and start over (from the first code point in input).
         }
@@ -284,7 +295,6 @@ internal partial class InternalUrl
             _opaquePath = BaseUrl._opaquePath; // url’s path to base’s path,
 
             Query = CloneQuery(BaseUrl); // url’s query to base’s query,
-            Buf.EnsureCapacity(Length - Pointer); // url’s fragment to the empty string,
 
             State = InternalUrlParserState.Fragment; // and set state to fragment state.
             return;
@@ -330,7 +340,7 @@ internal partial class InternalUrl
         {
             Username = BaseUrl.Username;
             Password = BaseUrl.Password;
-            Host = BaseUrl.Host;
+            Host = CloneHost(BaseUrl);
             Port = BaseUrl.Port;
             Path = ClonePath(BaseUrl);
             Query = CloneQuery(BaseUrl);
@@ -341,7 +351,6 @@ internal partial class InternalUrl
             }
             else if (c == '#')
             {
-                Buf.EnsureCapacity(Length - Pointer);
                 State = InternalUrlParserState.Fragment;
             }
             else if (c != '\u0000')
@@ -368,7 +377,7 @@ internal partial class InternalUrl
         {
             Username = BaseUrl!.Username;
             Password = BaseUrl!.Password;
-            Host = BaseUrl!.Host;
+            Host = CloneHost(BaseUrl!);
             Port = BaseUrl!.Port;
 
             State = InternalUrlParserState.Path;
@@ -422,60 +431,6 @@ internal partial class InternalUrl
         }
     }
 
-    // https://url.spec.whatwg.org/#host-state
-    private void HostState(char c)
-    {
-        if (c == ':' && !_arrFlag)
-        {
-            if (Buf.Length == 0)
-            {
-                Error = UrlErrorCode.HostMissing;
-                return;
-            }
-
-            var parseResult = HostParser.Parse(Buf.ToString(), true);
-            if (!parseResult)
-            {
-                Error = parseResult.Error;
-                return;
-            }
-
-            Host = parseResult.Value;
-            Buf.Clear();
-            State = InternalUrlParserState.Port;
-        }
-        else if (c is '/' or '?' or '#' || IsSpecial && c == '\\' || Pointer == Length)
-        {
-            Pointer--;
-
-            if (IsSpecial && Buf.Length == 0)
-            {
-                Error = UrlErrorCode.HostMissing;
-                return;
-            }
-
-            var parseResult = HostParser.Parse(Buf.ToString(), !IsSpecial);
-            if (!parseResult)
-            {
-                Error = parseResult.Error;
-                return;
-            }
-
-            Host = parseResult.Value;
-            Buf.Clear();
-            State = InternalUrlParserState.PathStart;
-        }
-        else
-        {
-            if (c == '[')
-                _arrFlag = true;
-            else if (c == ']')
-                _arrFlag = false;
-
-            AppendCurrent(c);
-        }
-    }
-
     // https://url.spec.whatwg.org/#port-state
     protected void PortState(char c)
     {
@@ -486,14 +441,16 @@ internal partial class InternalUrl
         // pointer is past the port, which means we can parse it
         else if (Pointer == Length || c is '/' or '?' or '#' || IsSpecial && c == '\\')
         {
-            if (Buf.Length != 0)
+            var bufLength = BufLength;
+            if (bufLength != 0)
             {
                 // 2. If port is greater than 2^16 − 1
-                var portBuf = Buf.Length <= 128
-                    ? stackalloc char[Buf.Length] 
-                    : new char[Buf.Length];
+                var portBuf = bufLength <= 128
+                    ? stackalloc char[bufLength] 
+                    : new char[bufLength];
 
-                Buf.CopyTo(0, portBuf, Buf.Length);
+                var buf = Buf;
+                buf.CopyTo(0, portBuf, bufLength);
 
                 if (!ushort.TryParse(portBuf, CultureInfo.InvariantCulture, out var port))
                 {
@@ -506,7 +463,7 @@ internal partial class InternalUrl
                 else
                     Port = port;
 
-                Buf.Clear();
+                buf.Clear();
             }
             // If state override is given, then return.
 
@@ -523,7 +480,7 @@ internal partial class InternalUrl
     protected void FileState(char c)
     {
         UpdateScheme(Schemes.File);
-        Host = "";
+        Host = UrlComponent.Empty;
 
         if (c is '/' or '\\')
         {
@@ -532,7 +489,7 @@ internal partial class InternalUrl
         }
         else if (BaseUrl is { Scheme: Schemes.File })
         {
-            Host = BaseUrl.Host;
+            Host = CloneHost(BaseUrl);
             Path = ClonePath(BaseUrl);
             Query = CloneQuery(BaseUrl);
             if (c == '?')
@@ -541,7 +498,6 @@ internal partial class InternalUrl
             }
             else if (c == '#')
             {
-                Buf.EnsureCapacity(Length - Pointer);
                 State = InternalUrlParserState.Fragment;
             }
             else if (c != '\u0000')
@@ -584,7 +540,7 @@ internal partial class InternalUrl
         {
             if (BaseUrl is { Scheme: Schemes.File })
             {
-                Host = BaseUrl.Host;
+                Host = CloneHost(BaseUrl);
 
                 // If the code point substring from pointer to the end of input does not start with a Windows drive letter
                 if (!StartsWithAWindowsDriveLetter(Remainder)
@@ -608,7 +564,7 @@ internal partial class InternalUrl
         {
             Pointer--;
             // state override here
-            if (Buf.Length == 2 && char.IsAsciiLetter(Buf[0]) && Buf[1] is ':' or '|')
+            if (BufLength == 2 && char.IsAsciiLetter(Buf[0]) && Buf[1] is ':' or '|')
             {
                 Debug.WriteLine("file-invalid-Windows-drive-letter-host");
 
@@ -625,27 +581,30 @@ internal partial class InternalUrl
                 return;
             }
 
-            if (Buf.Length == 0)
+            if (BufLength == 0)
             {
-                Host = "";
+                Host = UrlComponent.Empty;
                 // If state override is given, then return.
                 State = InternalUrlParserState.PathStart;
                 return;
             }
 
-            var parseResult = HostParser.Parse(Buf.ToString(), !IsSpecial);
+            var input = _buf?.ToString() ?? "";
+            var parseResult = HostParser.Parse(input, !IsSpecial);
             if (!parseResult)
             {
                 Error = parseResult.Error;
                 return;
             }
 
-            Host = parseResult.Value == "localhost"
-                ? ""
-                : parseResult.Value;
+            var parsedHost = parseResult.Value.ToString(input);
+            if (parsedHost == "localhost")
+                Host = UrlComponent.Empty;
+            else
+                Host = new UrlComponent(parsedHost);
 
             // If state override is given, then return.
-            Buf.Clear();
+            _buf?.Clear();
             State = InternalUrlParserState.PathStart;
         }
         else
@@ -672,7 +631,6 @@ internal partial class InternalUrl
         }
         else if (c == '#')
         {
-            Buf.EnsureCapacity(Length - Pointer);
             State = InternalUrlParserState.Fragment;
         }
         else if (Pointer != Length)
@@ -688,15 +646,14 @@ internal partial class InternalUrl
     {
         if (c == '?')
         {
-            _opaquePath = Buf.ToString();
-            Buf.Clear();
+            _opaquePath = _buf?.ToString() ?? "";
+            _buf?.Clear();
             State = InternalUrlParserState.Query;
         }
         else if (c == '#')
         {
-            _opaquePath = Buf.ToString();
-            Buf.Clear();
-            Buf.EnsureCapacity(Length - Pointer);
+            _opaquePath = _buf?.ToString() ?? "";
+            _buf?.Clear();
             State = InternalUrlParserState.Fragment;
         }
         else if (c == ' ')
@@ -725,8 +682,8 @@ internal partial class InternalUrl
             }
             else
             {
-                _opaquePath = Buf.ToString();
-                Buf.Clear();
+                _opaquePath = _buf?.ToString() ?? "";
+                _buf?.Clear();
             }
         }
     }
@@ -767,7 +724,7 @@ internal partial class InternalUrl
         var sb = new StringBuilder();
         sb.Append(Scheme).Append(':');
 
-        if (Host != null)
+        if (Host.HasValue)
         {
             sb.Append("//");
             if (!string.IsNullOrEmpty(Username) || !string.IsNullOrEmpty(Password))
@@ -779,12 +736,12 @@ internal partial class InternalUrl
                 sb.Append('@');
             }
 
-            sb.Append(SerializeHost());
+            AppendSerializedHost(sb);
         }
 
         // 3. If url’s host is null, url does not have an opaque path, url’s path’s size is greater than 1,
         // and url’s path[0] is the empty string
-        if (Host == null && _opaquePath == null && Path.Count > 1 && Path[0].IsEmpty)
+        if (!Host.HasValue && _opaquePath == null && Path.Count > 1 && Path[0].IsEmpty)
             sb.Append("/.");
 
         if (_opaquePath != null)
@@ -803,12 +760,26 @@ internal partial class InternalUrl
     // https://url.spec.whatwg.org/#host-serializing
     internal string SerializeHost()
     {
-        if (Host == null)
+        if (!Host.HasValue)
             return "";
 
-        return Port != null
-            ? $"{Host}:{Port}"
-            : Host;
+        if (!Port.HasValue)
+            return Host.GetString(Input);
+
+        var sb = new StringBuilder(Host.SerializedLength + 6);
+        AppendSerializedHost(sb);
+        return sb.ToString();
+    }
+
+    internal string SerializeHostname() =>
+        Host.GetString(Input);
+
+    private void AppendSerializedHost(StringBuilder sb)
+    {
+        sb.Append(Host.AsSpan(Input));
+
+        if (Port.HasValue)
+            sb.Append(':').Append(Port.GetValueOrDefault());
     }
 
     // TODO: needs to be verified with the spec. Currently works like in the ada
