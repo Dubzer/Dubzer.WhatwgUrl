@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
@@ -28,7 +29,7 @@ public class ParseUrlBenchmarks
 	{
 		if (DataSet is TestSet.UrlTestData or TestSet.UrlTestDataValidOnly)
 		{
-			using var file = File.OpenRead("Resources/urltestdata.json");
+			using var file = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Resources", "urltestdata.json"));
 			var nodes = JsonNode.Parse(file)!.AsArray();
 
 			var temp = nodes
@@ -45,7 +46,7 @@ public class ParseUrlBenchmarks
 		}
 		else if (DataSet == TestSet.Top100)
 		{
-			_data = File.ReadLines("Resources/top100.txt")
+			_data = File.ReadLines(Path.Combine(AppContext.BaseDirectory, "Resources", "top100.txt"))
 				.Select(static url => (url, (string?) null))
 				.ToArray();
 		}

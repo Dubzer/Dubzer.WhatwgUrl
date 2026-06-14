@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
@@ -31,7 +32,7 @@ public class IdnaBenchmarks
 		{
 			case TestSet.FullIdnaTestV2 or TestSet.ValidOnlyIdnaTestV2:
 			{
-				using var file = File.OpenRead("Resources/IdnaTestV2.json");
+				using var file = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Resources", "IdnaTestV2.json"));
 				var nodes = JsonNode.Parse(file)!.AsArray();
 				var temp = nodes
 					.Where(static node => node!.GetValueKind() != JsonValueKind.String)
