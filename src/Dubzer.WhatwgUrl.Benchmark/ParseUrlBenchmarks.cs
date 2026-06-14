@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BenchmarkDotNet.Attributes;
-using Dubzer.WhatwgUrl.Tests.Models;
 
 namespace Dubzer.WhatwgUrl.Benchmark;
 
@@ -31,11 +30,10 @@ public class ParseUrlBenchmarks
 		{
 			using var file = File.OpenRead("Resources/urltestdata.json");
 			var nodes = JsonNode.Parse(file)!.AsArray();
-			var serializerOptions = new JsonSerializerOptions {PropertyNameCaseInsensitive = true};
 
 			var temp = nodes
 				.Where(static node => node!.GetValueKind() != JsonValueKind.String)
-				.Select(node => node.Deserialize<UrlTestCase>(serializerOptions)!);
+				.Select(static node => node.Deserialize(BenchmarkJsonContext.Default.BenchmarkUrlTestCase)!);
 
 			if (DataSet == TestSet.UrlTestDataValidOnly)
 			{
