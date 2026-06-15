@@ -10,14 +10,13 @@ namespace Dubzer.WhatwgUrl;
 internal partial class InternalUrl
 {
     private bool _triedFastPath;
-    protected List<UrlComponent> Path = [];
+    private protected PathBuffer Path;
 
-    protected static List<UrlComponent> ClonePath(InternalUrl source)
+    private static PathBuffer ClonePath(InternalUrl source)
     {
-        var copy = new List<UrlComponent>(source.Path.Count);
-        foreach (var pathComponent in source.Path)
-            copy.Add(pathComponent.Materialize(source.Input));
-
+        var copy = new PathBuffer();
+        for (var i = 0; i < source.Path.Count; i++)
+            copy.Add(source.Path[i].Materialize(source.Input));
 
         return copy;
     }
@@ -174,14 +173,14 @@ internal partial class InternalUrl
         }
         else
         {
-            Path.RemoveAt(Path.Count - 1);
+            Path.RemoveLast();
         }
     }
 
     private void AppendSerializedPath(StringBuilder sb)
     {
-        foreach (var pathComponent in Path)
-            AppendSerializedComponent(sb, pathComponent, Input, '/');
+        for (var i = 0; i < Path.Count; i++)
+            AppendSerializedComponent(sb, Path[i], Input, '/');
     }
 
     // https://url.spec.whatwg.org/#url-path-serializer
@@ -200,5 +199,82 @@ internal partial class InternalUrl
         AppendSerializedPath(sb);
 
         return sb.ToString();
+    }
+
+    private protected struct PathBuffer
+    {
+        private UrlComponent _first;
+        private List<UrlComponent>? _overflow;
+
+        internal int Count { get; private set; }
+
+        internal UrlComponent this[int index]
+        {
+            readonly get
+            {
+                if ((uint)index >= (uint)Count)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
+                if (index == 0)
+                    return _first;
+
+                return _overflow![index - 1];
+            }
+            set
+            {
+                if ((uint)index >= (uint)Count)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
+                if (index == 0)
+                {
+                    _first = value;
+                    return;
+                }
+
+                _overflow![index - 1] = value;
+            }
+        }
+
+        internal UrlComponent this[Index index]
+        {
+            readonly get => this[index.GetOffset(Count)];
+            set => this[index.GetOffset(Count)] = value;
+        }
+
+        internal void Add(UrlComponent component)
+        {
+            if (Count == 0)
+            {
+                _first = component;
+                Count = 1;
+                return;
+            }
+
+            _overflow ??= new List<UrlComponent>(4);
+
+            _overflow.Add(component);
+            Count++;
+        }
+
+        internal void Clear()
+        {
+            _first = default;
+            _overflow = null;
+            Count = 0;
+        }
+
+        internal void RemoveLast()
+        {
+            Debug.Assert(Count > 0);
+
+            if (Count == 1)
+            {
+                Clear();
+                return;
+            }
+
+            _overflow!.RemoveAt(Count - 2);
+            Count--;
+        }
     }
 }
