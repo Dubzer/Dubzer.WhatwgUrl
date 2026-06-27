@@ -54,6 +54,15 @@ internal partial class InternalUrl
             Pointer = "http://".Length;
         }
 
+        if (State == InternalUrlParserState.SpecialAuthorityIgnoreSlashes
+            && (uint)Pointer < (uint)formattedInput.Length
+            && formattedInput[Pointer] is not ('/' or '\\'))
+        {
+            var authorityEnd = formattedInput.AsSpan(Pointer).IndexOfAny(SpecialAuthorityEnd);
+            if (authorityEnd == -1 || formattedInput[Pointer + authorityEnd] != '@')
+                State = InternalUrlParserState.Host;
+        }
+
         for (; Pointer <= Length; Pointer++)
         {
             int p = Pointer;
