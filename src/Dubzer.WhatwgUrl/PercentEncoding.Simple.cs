@@ -9,7 +9,7 @@ internal static partial class PercentEncoding
 {
     public enum AppendEncodedSimpleResult : byte
     {
-        // vsb contains a valid result
+        // encoded contains a valid result
         Handled,
         // the input does not require processing and can be used as is
         NoProcessing
@@ -40,50 +40,60 @@ internal static partial class PercentEncoding
         'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~'
     ]);
 
-    public static AppendEncodedSimpleResult AppendEncodedSimple(ReadOnlySpan<char> input, ref ValueStringBuilder vsb, SearchValues<char> set)
+    public static AppendEncodedSimpleResult AppendEncodedSimple(ReadOnlySpan<char> input, SearchValues<char> set, out string encoded)
     {
+        encoded = "";
+
+        if (input.IsEmpty || input.IndexOfAnyExcept(set) == -1)
+            return AppendEncodedSimpleResult.NoProcessing;
+
         var processing = input;
-        var noProcessing = true;
-
-        while (!processing.IsEmpty)
+        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
+        try
         {
-            var requireEncodeIndex = processing.IndexOfAnyExcept(set);
-
-            if (noProcessing && requireEncodeIndex == -1)
-                return AppendEncodedSimpleResult.NoProcessing;
-
-            noProcessing = false;
-            switch (requireEncodeIndex)
+            while (!processing.IsEmpty)
             {
-                case -1: // No characters to encode
-                    vsb.Append(processing);
-                    return AppendEncodedSimpleResult.Handled;
+                var requireEncodeIndex = processing.IndexOfAnyExcept(set);
 
-                case 0: // Missing fragment that DOES NOT require character encoding
-                    var notRequireEncodeIndex = processing.IndexOfAny(set);
-
-                    if (notRequireEncodeIndex == -1)
-                    {
-                        // The entire remainder of the string needs encoding
-                        foreach (var c in processing)
-                            EncodeToUtf8HexWithPercent(c, ref vsb);
+                switch (requireEncodeIndex)
+                {
+                    case -1: // No characters to encode
+                        vsb.Append(processing);
+                        encoded = vsb.ToString();
                         return AppendEncodedSimpleResult.Handled;
-                    }
 
-                    foreach (var c in processing[..notRequireEncodeIndex])
-                        EncodeToUtf8HexWithPercent(c, ref vsb);
+                    case 0: // Missing fragment that DOES NOT require character encoding
+                        var notRequireEncodeIndex = processing.IndexOfAny(set);
 
-                    processing = processing[notRequireEncodeIndex..];
-                    break;
+                        if (notRequireEncodeIndex == -1)
+                        {
+                            // The entire remainder of the string needs encoding
+                            foreach (var c in processing)
+                                EncodeToUtf8HexWithPercent(c, ref vsb);
+                            encoded = vsb.ToString();
+                            return AppendEncodedSimpleResult.Handled;
+                        }
 
-                default:
-                    // Copy the safe prefix without further processing
-                    vsb.Append(processing[..requireEncodeIndex]);
-                    processing = processing[requireEncodeIndex..];
-                    break;
+                        foreach (var c in processing[..notRequireEncodeIndex])
+                            EncodeToUtf8HexWithPercent(c, ref vsb);
+
+                        processing = processing[notRequireEncodeIndex..];
+                        break;
+
+                    default:
+                        // Copy the safe prefix without further processing
+                        vsb.Append(processing[..requireEncodeIndex]);
+                        processing = processing[requireEncodeIndex..];
+                        break;
+                }
             }
-        }
 
-        return AppendEncodedSimpleResult.NoProcessing;
+            encoded = vsb.ToString();
+            return AppendEncodedSimpleResult.Handled;
+        }
+        finally
+        {
+            vsb.Dispose();
+        }
     }
 }

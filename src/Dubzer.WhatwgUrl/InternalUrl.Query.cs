@@ -1,5 +1,4 @@
 using System;
-using Dubzer.WhatwgUrl.BclInternal;
 using static Dubzer.WhatwgUrl.PercentEncoding.AppendEncodedSimpleResult;
 
 namespace Dubzer.WhatwgUrl;
@@ -20,21 +19,13 @@ internal partial class InternalUrl
             query = query[..end];
 
         var set = IsSpecial ? PercentEncoding.SpecialQueryEncodeSet : PercentEncoding.QueryEncodeSet;
-        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
-        try
+        var handled = PercentEncoding.AppendEncodedSimple(query, set, out var encodedQuery);
+        Query = handled switch
         {
-            var handled = PercentEncoding.AppendEncodedSimple(query, ref vsb, set);
-            Query = handled switch
-            {
-                Handled => new UrlComponent(vsb.ToString()),
-                NoProcessing => new UrlComponent(Pointer, query.Length),
-                _ => Query
-            };
-        }
-        finally
-        {
-            vsb.Dispose();
-        }
+            Handled => new UrlComponent(encodedQuery),
+            NoProcessing => new UrlComponent(Pointer, query.Length),
+            _ => Query
+        };
 
         Pointer += query.Length;
         if (endsWithFragment)

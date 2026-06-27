@@ -3,7 +3,6 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
-using Dubzer.WhatwgUrl.BclInternal;
 
 namespace Dubzer.WhatwgUrl;
 
@@ -116,40 +115,32 @@ internal partial class InternalUrl
             endsWithChar = remainder[lastInPath];
         }
 
-        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
-        try
+        var handled = PercentEncoding.AppendEncodedPath(path, out var encodedPath);
+
+        // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
+        switch (handled)
         {
-            var handled = PercentEncoding.AppendEncodedPath(path, ref vsb);
-
-            // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
-            switch (handled)
-            {
-                case PercentEncoding.AppendEncodedPathResult.Handled:
-                    Path.Add(new UrlComponent(vsb.ToString()));
-                    break;
-                case PercentEncoding.AppendEncodedPathResult.NoProcessing:
-                    Path.Add(new UrlComponent(Pointer, path.Length));
-                    break;
-                case PercentEncoding.AppendEncodedPathResult.Fallback:
-                    Pointer--;
-                    return;
-            }
-
-            Pointer += lastInPath;
-
-            switch (endsWithChar)
-            {
-                case '?':
-                    State = InternalUrlParserState.Query;
-                    break;
-                case '#':
-                    State = InternalUrlParserState.Fragment;
-                    break;
-            }
+            case PercentEncoding.AppendEncodedPathResult.Handled:
+                Path.Add(new UrlComponent(encodedPath));
+                break;
+            case PercentEncoding.AppendEncodedPathResult.NoProcessing:
+                Path.Add(new UrlComponent(Pointer, path.Length));
+                break;
+            case PercentEncoding.AppendEncodedPathResult.Fallback:
+                Pointer--;
+                return;
         }
-        finally
+
+        Pointer += lastInPath;
+
+        switch (endsWithChar)
         {
-            vsb.Dispose();
+            case '?':
+                State = InternalUrlParserState.Query;
+                break;
+            case '#':
+                State = InternalUrlParserState.Fragment;
+                break;
         }
     }
 

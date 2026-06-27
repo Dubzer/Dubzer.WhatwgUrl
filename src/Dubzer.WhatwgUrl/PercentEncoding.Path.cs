@@ -8,7 +8,7 @@ internal static partial class PercentEncoding
 {
     public enum AppendEncodedPathResult : byte
     {
-        // vsb contains a valid result
+        // encoded contains a valid result
         Handled,
         // the input does not require processing and can be used as is
         NoProcessing,
@@ -44,63 +44,72 @@ internal static partial class PercentEncoding
         );
 
 
-    public static AppendEncodedPathResult AppendEncodedPath(ReadOnlySpan<char> input, ref ValueStringBuilder vsb)
+    public static AppendEncodedPathResult AppendEncodedPath(ReadOnlySpan<char> input, out string encoded)
     {
+        encoded = "";
+
         if (input.IsEmpty) return AppendEncodedPathResult.Handled;
         if (RequiresDotHandling(input)) return AppendEncodedPathResult.Fallback;
 
+        if (input.IndexOfAnyExcept(PathEncodeSet) == -1)
+            return AppendEncodedPathResult.NoProcessing;
+
         var processing = input;
-        // the input does not require processing and can be used as is
-        var noProcessing = true;
-
-        while (!processing.IsEmpty)
+        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
+        try
         {
-            var requireEncodeIndex = processing.IndexOfAnyExcept(PathEncodeSet);
-
-            if (noProcessing && requireEncodeIndex == -1)
-                return AppendEncodedPathResult.NoProcessing;
-
-            noProcessing = false;
-            switch (requireEncodeIndex)
+            while (!processing.IsEmpty)
             {
-                case -1: // No characters to encode
-                    vsb.Append(processing);
-                    return AppendEncodedPathResult.Handled;
+                var requireEncodeIndex = processing.IndexOfAnyExcept(PathEncodeSet);
 
-                case 0: // Missing fragment that DOES NOT require character encoding
-                    var notRequireEncodeIndex = processing.IndexOfAny(PathEncodeSet);
-
-                    if (notRequireEncodeIndex == -1)
-                    {
-                        // The entire remainder of the string needs encoding
-                        foreach (var c in processing)
-                            EncodeToUtf8HexWithPercent(c, ref vsb);
+                switch (requireEncodeIndex)
+                {
+                    case -1: // No characters to encode
+                        vsb.Append(processing);
+                        encoded = vsb.ToString();
                         return AppendEncodedPathResult.Handled;
-                    }
 
-                    foreach (var c in processing[..notRequireEncodeIndex])
-                        EncodeToUtf8HexWithPercent(c, ref vsb);
+                    case 0: // Missing fragment that DOES NOT require character encoding
+                        var notRequireEncodeIndex = processing.IndexOfAny(PathEncodeSet);
 
-                    processing = processing[notRequireEncodeIndex..];
-                    break;
-                default:
-                    // Copy the safe prefix without further processing
-                    vsb.Append(processing[..requireEncodeIndex]);
-                    processing = processing[requireEncodeIndex..];
-                    break;
+                        if (notRequireEncodeIndex == -1)
+                        {
+                            // The entire remainder of the string needs encoding
+                            foreach (var c in processing)
+                                EncodeToUtf8HexWithPercent(c, ref vsb);
+                            encoded = vsb.ToString();
+                            return AppendEncodedPathResult.Handled;
+                        }
+
+                        foreach (var c in processing[..notRequireEncodeIndex])
+                            EncodeToUtf8HexWithPercent(c, ref vsb);
+
+                        processing = processing[notRequireEncodeIndex..];
+                        break;
+                    default:
+                        // Copy the safe prefix without further processing
+                        vsb.Append(processing[..requireEncodeIndex]);
+                        processing = processing[requireEncodeIndex..];
+                        break;
+                }
             }
-        }
 
-        return AppendEncodedPathResult.Handled;
+            encoded = vsb.ToString();
+            return AppendEncodedPathResult.Handled;
+        }
+        finally
+        {
+            vsb.Dispose();
+        }
     }
-    private static readonly SearchValues<char> SpecialHandlingChars = SearchValues.Create(['\\', '%']);
+    private static readonly SearchValues<char> SpecialHandlingChars = SearchValues.Create(['\\']);
 
 #if NET9_0_OR_GREATER
-    private static readonly SearchValues<string> SpecialHandlingStrings = SearchValues.Create(["..", "/.", "./"], StringComparison.Ordinal);
+    private static readonly SearchValues<string> SpecialHandlingStrings = SearchValues.Create(["..", "/.", "./", "%2e", "%2E"], StringComparison.Ordinal);
 
     private static bool RequiresDotHandling(ReadOnlySpan<char> input)
     {
-        // .NET will start using the much slower Aho-Corasick variant with dictionary validation, so you should not combine one-character and two-character strings into a single set
+        // .NET will start using the much slower Aho-Corasick variant with dictionary validation, so you should not combine one-character and multi-character strings into a single set
         return input[0] == '.' || input[^1] == '.' || input.ContainsAny(SpecialHandlingChars) || input.ContainsAny(SpecialHandlingStrings);
     }
 #else
@@ -108,6 +117,7 @@ internal static partial class PercentEncoding
     {
         // Maybe a little bit sped up by repeating the implementation from .NET 9, but overall, not much of a bottleneck in the current implementation
         return input[0] == '.' || input[^1] == '.' || input.ContainsAny(SpecialHandlingChars) ||
+               input.Contains("%2e", StringComparison.OrdinalIgnoreCase) ||
                input.Contains("..", StringComparison.Ordinal) || input.Contains("/.", StringComparison.Ordinal) ||
                input.Contains("./", StringComparison.Ordinal);
     }

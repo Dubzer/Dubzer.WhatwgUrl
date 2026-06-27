@@ -1,4 +1,3 @@
-using Dubzer.WhatwgUrl.BclInternal;
 using static Dubzer.WhatwgUrl.PercentEncoding.AppendEncodedSimpleResult;
 
 namespace Dubzer.WhatwgUrl;
@@ -9,21 +8,13 @@ internal partial class InternalUrl
     protected virtual void FragmentState(char c)
     {
         var fragment = Remainder;
-        var vsb = new ValueStringBuilder(Consts.MaxLengthOnStack.Char);
-        try
+        var handled = PercentEncoding.AppendEncodedSimple(fragment, PercentEncoding.FragmentEncodeSet, out var encodedFragment);
+        Fragment = handled switch
         {
-            var handled = PercentEncoding.AppendEncodedSimple(fragment, ref vsb, PercentEncoding.FragmentEncodeSet);
-            Fragment = handled switch
-            {
-                Handled => new UrlComponent(vsb.ToString()),
-                NoProcessing => new UrlComponent(Pointer, fragment.Length),
-                _ => Query
-            };
-        }
-        finally
-        {
-            vsb.Dispose();
-        }
+            Handled => new UrlComponent(encodedFragment),
+            NoProcessing => new UrlComponent(Pointer, fragment.Length),
+            _ => Query
+        };
 
         Pointer += fragment.Length;
     }
