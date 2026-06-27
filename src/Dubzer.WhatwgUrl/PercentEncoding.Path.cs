@@ -102,21 +102,35 @@ internal static partial class PercentEncoding
             vsb.Dispose();
         }
     }
-    private static readonly SearchValues<char> SpecialHandlingChars = SearchValues.Create(['\\']);
+
+    // .NET will start using the much slower Aho-Corasick variant with dictionary validation, 
+    // so you should not combine one-character and multi-character strings into a single set
+    private static readonly SearchValues<char> PathFallbackChars = SearchValues.Create(['.', '%', '\\']);
 
 #if NET9_0_OR_GREATER
-    private static readonly SearchValues<string> SpecialHandlingStrings = SearchValues.Create(["..", "/.", "./", "%2e", "%2E"], StringComparison.Ordinal);
+    private static readonly SearchValues<string> PathFallbackStrings = SearchValues.Create(["..", "/.", "./", "%2e", "%2E"], StringComparison.Ordinal);
 
     private static bool RequiresDotHandling(ReadOnlySpan<char> input)
     {
-        // .NET will start using the much slower Aho-Corasick variant with dictionary validation, so you should not combine one-character and multi-character strings into a single set
-        return input[0] == '.' || input[^1] == '.' || input.ContainsAny(SpecialHandlingChars) || input.ContainsAny(SpecialHandlingStrings);
+        if (input[0] == '.' || input[^1] == '.')
+            return true;
+
+        if (!input.ContainsAny(PathFallbackChars))
+            return false;
+
+        return input.Contains('\\') || input.ContainsAny(PathFallbackStrings);
     }
 #else
     private static bool RequiresDotHandling(ReadOnlySpan<char> input)
     {
         // Maybe a little bit sped up by repeating the implementation from .NET 9, but overall, not much of a bottleneck in the current implementation
-        return input[0] == '.' || input[^1] == '.' || input.ContainsAny(SpecialHandlingChars) ||
+        if (input[0] == '.' || input[^1] == '.')
+            return true;
+
+        if (!input.ContainsAny(PathFallbackChars))
+            return false;
+
+        return input.Contains('\\') ||
                input.Contains("%2e", StringComparison.OrdinalIgnoreCase) ||
                input.Contains("..", StringComparison.Ordinal) || input.Contains("/.", StringComparison.Ordinal) ||
                input.Contains("./", StringComparison.Ordinal);
