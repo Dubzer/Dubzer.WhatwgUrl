@@ -34,7 +34,9 @@ internal partial class InternalUrl
     {
         BaseUrl = baseUrl;
 
-        var formattedInput = InputUtils.Format(input);
+        var formattedInput = InputUtils.Format(input, out var containsHighSurrogate);
+        if (containsHighSurrogate)
+            return new InternalUrlRune().Parse(input, baseUrl);
 
         Input = formattedInput;
         Length = formattedInput.Length;

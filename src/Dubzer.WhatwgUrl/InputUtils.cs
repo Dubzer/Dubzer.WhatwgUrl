@@ -7,26 +7,30 @@ internal static class InputUtils
 {
     private static readonly SearchValues<char> InvalidUrlUnitSearchValues = SearchValues.Create(['\x09', '\x0a', '\x0d']);
 
-    /// <summary>
-    /// Returns the correct parser implementation
-    /// when input contains surrogate pairs
-    /// </summary>
-    /// <returns></returns>
-    public static InternalUrl GetParser(string input) =>
-        input.AsSpan().ContainsAnyInRange('\ud800', '\udbff')
-            ? new InternalUrlRune()
-            : new InternalUrl();
+    public static string Format(string input) => Format(input, out _);
 
-    public static string Format(string input)
+    public static string Format(string input, out bool containsHighSurrogate)
     {
         var inputSpan = input.AsSpan();
 
-        var controlCharStart = inputSpan.IndexOfAnyInRange('\x00', '\x20');
+        containsHighSurrogate = false;
+        // fast path for inputs that cannot contain trim/control characters or UTF-16 surrogates
+        var formatOrSurrogateStart = inputSpan.IndexOfAnyExceptInRange('\x21', '\ud7ff');
+        if (formatOrSurrogateStart < 0)
+            return input;
+
+        containsHighSurrogate = inputSpan.ContainsAnyInRange('\ud800', '\udbff');
+
+        var controlCharStart = inputSpan[formatOrSurrogateStart] <= '\x20'
+            ? 0
+            : inputSpan[formatOrSurrogateStart..].IndexOfAnyInRange('\x00', '\x20');
         if (controlCharStart < 0)
         {
             // we can safely return because InvalidUrlUnitSearchValues is also in that range
             return input;
         }
+
+        controlCharStart += formatOrSurrogateStart;
 
         if (controlCharStart == 0)
         {

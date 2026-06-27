@@ -107,7 +107,7 @@ public class DomUrl : IEquatable<DomUrl>
 
     private static InternalUrl ParseUrl(string input, InternalUrl? baseUrl = null)
     {
-        Result<InternalUrl> urlResult = InputUtils.GetParser(input).Parse(input, baseUrl);
+        Result<InternalUrl> urlResult = new InternalUrl().Parse(input, baseUrl);
 
         if (!urlResult)
             throw new InvalidUrlException("The URL is invalid.", urlResult.Error!.Value);
@@ -149,7 +149,7 @@ public class DomUrl : IEquatable<DomUrl>
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var parsed = InputUtils.GetParser(input).Parse(input);
+        var parsed = new InternalUrl().Parse(input);
         if (!parsed)
         {
             result = null;
@@ -175,7 +175,7 @@ public class DomUrl : IEquatable<DomUrl>
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(baseUrl);
 
-        var parsed = InputUtils.GetParser(input).Parse(input, baseUrl._internalUrl);
+        var parsed = new InternalUrl().Parse(input, baseUrl._internalUrl);
         if (!parsed)
         {
             result = null;
@@ -201,7 +201,7 @@ public class DomUrl : IEquatable<DomUrl>
         InternalUrl? parsedBaseUrl = null;
         if (!string.IsNullOrEmpty(baseUrl))
         {
-            var baseResult = InputUtils.GetParser(input).Parse(baseUrl);
+            var baseResult = new InternalUrl().Parse(baseUrl);
             if (!baseResult)
             {
                 result = null;
@@ -211,7 +211,7 @@ public class DomUrl : IEquatable<DomUrl>
             parsedBaseUrl = baseResult.Value;
         }
 
-        var urlResult = InputUtils.GetParser(input).Parse(input, parsedBaseUrl);
+        var urlResult = new InternalUrl().Parse(input, parsedBaseUrl);
         if (!urlResult)
         {
             result = null;
