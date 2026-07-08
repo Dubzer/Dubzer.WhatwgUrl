@@ -728,46 +728,6 @@ internal partial class InternalUrl
         return true;
     }
 
-    // https://url.spec.whatwg.org/#url-serializing
-    internal string SerializeUrl(bool excludeFragment = false)
-    {
-        // 1. Let output be url’s scheme and U+003A (:) concatenated.
-        var sb = new StringBuilder();
-        sb.Append(Scheme).Append(':');
-
-        if (Host.HasValue)
-        {
-            sb.Append("//");
-            if (!string.IsNullOrEmpty(Username) || !string.IsNullOrEmpty(Password))
-            {
-                sb.Append(Username);
-                if (!string.IsNullOrEmpty(Password))
-                    sb.Append(':').Append(Password);
-
-                sb.Append('@');
-            }
-
-            AppendSerializedHost(sb);
-        }
-
-        // 3. If url’s host is null, url does not have an opaque path, url’s path’s size is greater than 1,
-        // and url’s path[0] is the empty string
-        if (!Host.HasValue && _opaquePath == null && Path.Count > 1 && Path[0].IsEmpty)
-            sb.Append("/.");
-
-        if (_opaquePath != null)
-            sb.Append(_opaquePath);
-        else
-            AppendSerializedPath(sb);
-
-        AppendSerializedComponent(sb, Query, Input, '?');
-
-        if (!excludeFragment)
-            AppendSerializedComponent(sb, Fragment, Input, '#');
-
-        return sb.ToString();
-    }
-
     // https://url.spec.whatwg.org/#host-serializing
     internal string SerializeHost()
     {
